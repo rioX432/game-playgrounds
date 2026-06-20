@@ -1,18 +1,14 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { FollowCamera } from "@babylonjs/core/Cameras/followCamera";
-import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
-import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import "@babylonjs/core/Meshes/Builders/groundBuilder";
-import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/capsuleBuilder";
 
 import { createInput } from "../../engine/input";
 import { createHud } from "../../engine/hud";
+import { createGround, createBoxGrid, createLightPreset } from "../../engine/scene";
 import type { Sample, SampleContext } from "../types";
 
 /**
@@ -32,32 +28,12 @@ function sample01Mount(ctx: SampleContext): () => void {
   const { scene } = ctx;
   scene.clearColor.set(0.6, 0.75, 0.9, 1);
 
-  // --- Lighting ---
-  const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
-  hemi.intensity = 0.7;
-  const sun = new DirectionalLight("sun", new Vector3(-0.5, -1, -0.5), scene);
-  sun.intensity = 0.6;
-
-  // --- Ground ---
-  const ground = MeshBuilder.CreateGround(
-    "ground",
-    { width: 60, height: 60 },
-    scene,
-  );
-  const groundMat = new StandardMaterial("groundMat", scene);
-  groundMat.diffuseColor = new Color3(0.35, 0.5, 0.35);
-  ground.material = groundMat;
-
-  // --- Scattered obstacle boxes ---
-  const boxMat = new StandardMaterial("boxMat", scene);
-  boxMat.diffuseColor = new Color3(0.8, 0.55, 0.3);
-  const boxes: AbstractMesh[] = [];
-  for (let i = 0; i < 6; i++) {
-    const box = MeshBuilder.CreateBox("box" + i, { size: 2 }, scene);
-    box.position.set((i - 3) * 5 + 2, 1, ((i % 3) - 1) * 8);
-    box.material = boxMat;
-    boxes.push(box);
-  }
+  // --- Lighting / ground / obstacles via shared scene primitives ---
+  // These are owned by the scene and freed by scene.dispose() on switch, so the
+  // sample does not need to dispose them manually (see engine/scene.ts).
+  createLightPreset(scene);
+  createGround(scene);
+  createBoxGrid(scene, { columns: 4, rows: 4, boxSize: 2, spacing: 8 });
 
   // --- Player capsule ---
   const capsuleHeight = 2;

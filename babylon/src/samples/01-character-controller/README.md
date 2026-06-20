@@ -17,6 +17,12 @@ live FPS counter top-right. The HUD is plain DOM (no Babylon GUI), attaches to t
 canvas's parent, and removes all of its nodes + the FPS observer on dispose. This
 sample is the reference consumer of that module too.
 
+The world dressing — light preset, ground plane, and obstacle box grid — comes
+from the shared `engine/scene` module (`createLightPreset`, `createGround`,
+`createBoxGrid`). These are scene-owned (meshes, materials, lights), so they are
+freed by `scene.dispose()` on switch and the sample does not dispose them
+manually. This sample is the reference consumer of that module too.
+
 ## Controls
 
 | Input | Action |
@@ -65,3 +71,8 @@ sample is the reference consumer of that module too.
 - Parenting the capsule to a `TransformNode` keeps yaw rotation and translation
   separate from the mesh's own transform, which avoids gimbal surprises.
 - Ground collision here is a simple `y <= 0` clamp — there is no real collider.
+- **Shared scene primitives own their own meshes/materials.** `engine/scene`
+  factories return objects with an idempotent `dispose()`, but it is for *early*
+  teardown only (clearing props mid-sample). For the normal switch lifecycle we
+  rely on `scene.dispose()` and call nothing — calling primitive `dispose()` just
+  before scene disposal would be redundant.
