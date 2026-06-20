@@ -22,9 +22,14 @@
 //! **Shared input:** movement reads the global [`MoveIntent`] resource owned by
 //! `engine::input::FoundationInputPlugin` instead of polling `ButtonInput` here,
 //! so every sample shares one keyboard-intent definition.
+//!
+//! **Shared HUD:** this is the reference consumer of `engine::hud` — `setup`
+//! calls `spawn_controls_overlay` + `spawn_fps_counter`, both `DespawnOnExit`-
+//! scoped internally, so the HUD auto-cleans on `Esc` with no teardown here.
 
 use bevy::prelude::*;
 
+use crate::engine::hud;
 use crate::engine::input::MoveIntent;
 
 use super::{AppState, SampleMeta};
@@ -109,6 +114,12 @@ fn setup(
         Transform::from_xyz(4.0, 8.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
         scope,
     ));
+
+    // Shared HUD: controls overlay (bottom-left) + FPS counter (top-right).
+    // Both tag themselves `DespawnOnExit(state)` internally, so no teardown here.
+    let state = AppState::S01CharacterController;
+    hud::spawn_controls_overlay(&mut commands, state, &["WASD — move", "Esc — back to menu"]);
+    hud::spawn_fps_counter(&mut commands, state);
 }
 
 /// Moves the player on the XZ plane from the shared [`MoveIntent`] (world axes,

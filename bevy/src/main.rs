@@ -16,6 +16,7 @@ mod samples;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
+use engine::hud::FoundationHudPlugin;
 use engine::input::FoundationInputPlugin;
 use samples::{all, register_samples, AppState, SampleEntry};
 
@@ -43,6 +44,10 @@ fn main() {
     // Shared foundation input (keyboard intent + pointer-lock mouse look).
     // Added ONCE here; samples READ its resources (see `engine/input.rs`).
     .add_plugins(FoundationInputPlugin)
+    // Shared foundation HUD (frame-time diagnostics + FPS counter driver).
+    // Added ONCE here; samples spawn per-sample HUD widgets via the helpers in
+    // `engine/hud.rs` (see `spawn_controls_overlay` / `spawn_fps_counter`).
+    .add_plugins(FoundationHudPlugin)
     .init_state::<AppState>()
     // Menu lifecycle.
     .add_systems(OnEnter(AppState::Menu), spawn_menu)
