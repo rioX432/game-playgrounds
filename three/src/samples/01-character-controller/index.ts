@@ -9,6 +9,7 @@ import {
   PlaneGeometry,
   Vector3,
 } from "three";
+import { InputController } from "../../engine/input";
 import type { Sample, SampleContext } from "../types";
 
 // Tuning constants (no magic numbers in the logic below).
@@ -18,7 +19,8 @@ const JUMP_VELOCITY = 9; // m/s
 const CAPSULE_RADIUS = 0.4;
 const CAPSULE_HEIGHT = 1.0; // cylinder part; total ~1.8m
 const GROUND_Y = 0;
-const MOUSE_SENSITIVITY = 0.0022;
+const INITIAL_PITCH = 0.2;
+const PITCH_CLAMP: [number, number] = [-0.4, 1.2];
 const CAMERA_DISTANCE = 6;
 const CAMERA_HEIGHT = 3;
 
@@ -66,58 +68,47 @@ const sample: Sample = {
     player.position.set(0, GROUND_Y + halfHeight, 0);
     scene.add(player);
 
-    // Input state.
-    const keys = new Set<string>();
-    let yaw = 0;
-    let pitch = 0.2;
+    // Shared input module: keyboard state + pointer-lock mouse look.
+    const input = new InputController({
+      pointerLockTarget: canvas,
+      initialPitch: INITIAL_PITCH,
+      pitchClamp: PITCH_CLAMP,
+    });
+
+    // Movement / physics state owned by the sample.
     let velocityY = 0;
     let grounded = true;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      keys.add(e.code);
-      if (e.code === "Space" && grounded) {
-        velocityY = JUMP_VELOCITY;
-        grounded = false;
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (document.pointerLockElement !== canvas) return;
-      yaw -= e.movementX * MOUSE_SENSITIVITY;
-      pitch -= e.movementY * MOUSE_SENSITIVITY;
-      // Clamp pitch to avoid camera flip.
-      pitch = Math.max(-0.4, Math.min(1.2, pitch));
-    };
-    const onClick = () => {
-      if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("mousemove", onMouseMove);
-    canvas.addEventListener("click", onClick);
 
     // Per-frame update (state only; the engine handles rendering).
     let raf = 0;
     let last = performance.now();
     const forward = new Vector3();
     const right = new Vector3();
+    const move = new Vector3();
 
     const update = (now: number) => {
       raf = requestAnimationFrame(update);
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
 
+      const yaw = input.yaw;
+      const pitch = input.pitch;
+
+      // Jump is edge-triggered: only fires the frame Space is first pressed.
+      if (grounded && input.consumeJustPressed("Space")) {
+        velocityY = JUMP_VELOCITY;
+        grounded = false;
+      }
+
       // Movement basis from yaw (horizontal plane).
       forward.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
       right.set(forward.z, 0, -forward.x);
 
-      const move = new Vector3();
-      if (keys.has("KeyW")) move.add(forward);
-      if (keys.has("KeyS")) move.sub(forward);
-      if (keys.has("KeyA")) move.add(right);
-      if (keys.has("KeyD")) move.sub(right);
+      move.set(0, 0, 0);
+      if (input.isDown("KeyW")) move.add(forward);
+      if (input.isDown("KeyS")) move.sub(forward);
+      if (input.isDown("KeyA")) move.add(right);
+      if (input.isDown("KeyD")) move.sub(right);
       if (move.lengthSq() > 0) {
         move.normalize().multiplyScalar(MOVE_SPEED * dt);
         player.position.x += move.x;
@@ -145,17 +136,17 @@ const sample: Sample = {
       ).multiplyScalar(-CAMERA_DISTANCE);
       camera.position.copy(player.position).add(offset);
       camera.position.y += CAMERA_HEIGHT * Math.cos(pitch);
-      camera.lookAt(player.position.x, player.position.y + 0.5, player.position.z);
+      camera.lookAt(
+        player.position.x,
+        player.position.y + 0.5,
+        player.position.z,
+      );
     };
     raf = requestAnimationFrame(update);
 
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("mousemove", onMouseMove);
-      canvas.removeEventListener("click", onClick);
-      if (document.pointerLockElement === canvas) document.exitPointerLock();
+      input.dispose();
     };
   },
 };
