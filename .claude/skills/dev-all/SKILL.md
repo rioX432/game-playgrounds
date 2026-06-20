@@ -120,6 +120,14 @@ TaskCreate for each issue: "#{number}: {title}"
 git checkout main && git pull origin main
 ```
 
+#### 4a-design. Design Gate — Codex MCP (new shared patterns only)
+
+**Before implementing an issue that introduces a NEW shared pattern** (foundation module, new architecture, a template that later issues will copy), verify the design **once** with Codex MCP (`ToolSearch("select:mcp__codex__codex")`), per `rules/ai-ops.md` step 5.
+
+- Run it **once per new pattern**, not per issue. The first issue of a foundation set (e.g. the first `engine/` shared module **for a given engine**) gets a Codex design check; the siblings that copy the established pattern **skip** Codex. Each engine's foundation is its own pattern (different lifecycle APIs), so re-verify once per engine.
+- Feed the Codex pitfalls forward: bake them into the implementer sub-agent's prompt (4b) and into the review checklist (4b-review).
+- Pure existing-pattern issues, small fixes, naming → **skip** Codex. Codex is for design, not fact lookup.
+
 #### 4b. Run /dev in isolated sub-agent (autonomous via /goal)
 ```
 Agent(
@@ -152,10 +160,30 @@ After the sub-agent completes, validate the result before proceeding to merge:
 | `clean` | **Proceed to auto-merge.** |
 | Sub-agent failed (`status: "failed"`) | **Skip this issue.** Report failure reason. Proceed to next issue. |
 
-#### 4c. Enable auto-merge
+#### 4b-review. Independent review gate (MANDATORY, every PR)
+
+The sub-agent's own self-review is **not** sufficient. Before merging, run an **independent** review on the PR diff:
+
+- Spawn a fresh review sub-agent (or invoke `/code-review` / the `review` skill) against `origin/main...origin/{branch}` for the PR's subdir.
+- Include any Codex pitfalls from 4a-design as explicit checks for this engine/pattern.
+- Apply the same severity decision table as 4b-result: **Critical → skip/fix**, **Warning → report (autonomous: best-judgment; interactive: ask)**, **clean → merge**.
+- Fix-then-merge is allowed: if the review finds a Critical/Warning that is cheap to fix, fix it in the worktree (or via a follow-up sub-agent), re-verify build green, then merge.
+
+#### 4c. Merge
+
 ```bash
-gh pr merge {PR_URL} --auto --merge --delete-branch
+gh pr merge {PR_URL} --auto --merge --delete-branch   # when CI + auto-merge are enabled
 ```
+
+**If the repo has no CI workflow or auto-merge is disabled** (`gh api repos/{owner}/{repo} --jq .allow_auto_merge` → `false`): the sub-agent's local build-green + the 4b-review gate ARE the validation. Merge directly:
+
+```bash
+gh pr merge {PR_URL} --merge --delete-branch
+git checkout main && git pull origin main --ff-only
+git worktree remove .claude/worktrees/agent-{id} --force   # clean up the issue's worktree
+```
+
+> **Committed-doc caveat:** any change you make to repo files OUTSIDE an issue worktree (e.g. editing this skill, rules, or docs on `main`) must be **committed promptly on its own branch+PR**. A later worktree sub-agent may reset the shared checkout to clean `main` and silently discard uncommitted changes.
 
 #### 4d. Wait for merge
 Poll until merged (check every 30 seconds, timeout 15 minutes):
@@ -201,6 +229,7 @@ In autonomous mode:
 - Skip `AskUserQuestion` confirmations — proceed with best judgment
 - On CI failure: skip the issue and continue (don't stop)
 - Stop only on 3 consecutive failures
+- **The gates still run.** "Skip confirmations" means skip the user prompts, NOT skip the gates: the 4a-design Codex check (new patterns) and the 4b-review independent review are MANDATORY in autonomous mode too. On a Warning, exercise best judgment instead of asking; never skip the review itself.
 
 ## Error Handling
 
