@@ -1,9 +1,10 @@
 //! # s01 — Third-person character controller
 //!
 //! **What it demonstrates:** A capsule "player" you drive with WASD, plus a
-//! follow camera trailing it over a ground plane. Movement is Transform-based
-//! (no physics engine) — the simplest faithful version of the mechanic, good
-//! for judging raw control feel before adding collision.
+//! follow camera trailing it over a ground plane, with a small grid of boxes as
+//! static reference props. Movement is Transform-based (no physics engine) — the
+//! simplest faithful version of the mechanic, good for judging raw control feel
+//! before adding collision.
 //!
 //! **Controls:** `W/A/S/D` move (camera-relative on the XZ plane). `Esc`
 //! returns to the menu.
@@ -11,7 +12,11 @@
 //! **Feel notes:** Instant accel/decel = very responsive but "slidey-free" and
 //! arcade-stiff; real games add accel ramps + a small camera lag. The follow
 //! camera here is a hard offset (no smoothing), so fast direction changes look
-//! snappy but slightly robotic. Document both when iterating.
+//! snappy but slightly robotic. The box grid is render-only (no collision), so
+//! the capsule drives straight through the boxes — they read as floating
+//! reference markers, not obstacles, which feels off the moment you expect to
+//! bump one; that's the honest cost of staying physics-free here. Document all
+//! three when iterating.
 //!
 //! **Bevy 0.18 gotchas:**
 //!   * Spawn meshes with `Mesh3d(handle)` + `MeshMaterial3d(handle)` — the old
@@ -26,11 +31,18 @@
 //! **Shared HUD:** this is the reference consumer of `engine::hud` — `setup`
 //! calls `spawn_controls_overlay` + `spawn_fps_counter`, both `DespawnOnExit`-
 //! scoped internally, so the HUD auto-cleans on `Esc` with no teardown here.
+//!
+//! **Shared scene:** likewise the reference consumer of `engine::scene` — the
+//! ground, directional light, and box grid come from `spawn_ground` /
+//! `spawn_light_preset` / `spawn_box_grid`, all `DespawnOnExit`-scoped
+//! internally. Only the sample-specific player capsule + follow camera are
+//! spawned inline here.
 
 use bevy::prelude::*;
 
 use crate::engine::hud;
 use crate::engine::input::MoveIntent;
+use crate::engine::scene;
 
 use super::{AppState, SampleMeta};
 
@@ -45,6 +57,9 @@ pub const META: SampleMeta = SampleMeta {
 const MOVE_SPEED: f32 = 6.0;
 /// Camera offset behind/above the player (world units).
 const CAMERA_OFFSET: Vec3 = Vec3::new(0.0, 6.0, 10.0);
+/// Reference-prop box grid dimensions (columns x rows).
+const BOX_GRID_COLS: u32 = 3;
+const BOX_GRID_ROWS: u32 = 3;
 
 #[derive(Component)]
 struct Player;
@@ -71,20 +86,23 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let scope = DespawnOnExit(AppState::S01CharacterController);
+    let state = AppState::S01CharacterController;
+    let scope = DespawnOnExit(state);
 
-    // Ground plane.
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(40.0, 40.0))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.3, 0.5, 0.3),
-            ..default()
-        })),
-        Transform::IDENTITY,
-        scope.clone(),
-    ));
+    // Shared scene primitives: ground + light preset + box grid. Each helper
+    // tags its entities `DespawnOnExit(state)` internally, so no teardown here.
+    scene::spawn_ground(&mut commands, &mut meshes, &mut materials, state);
+    scene::spawn_light_preset(&mut commands, state);
+    scene::spawn_box_grid(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        state,
+        BOX_GRID_COLS,
+        BOX_GRID_ROWS,
+    );
 
-    // Player capsule.
+    // Player capsule (sample-specific).
     commands.spawn((
         Player,
         Mesh3d(meshes.add(Capsule3d::new(0.5, 1.0))),
@@ -96,28 +114,16 @@ fn setup(
         scope.clone(),
     ));
 
-    // Follow camera, starting at the player's offset.
+    // Follow camera (sample-specific), starting at the player's offset.
     commands.spawn((
         FollowCamera,
         Camera3d::default(),
         Transform::from_translation(CAMERA_OFFSET).looking_at(Vec3::ZERO, Vec3::Y),
-        scope.clone(),
-    ));
-
-    // Light.
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 10_000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(4.0, 8.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
         scope,
     ));
 
     // Shared HUD: controls overlay (bottom-left) + FPS counter (top-right).
     // Both tag themselves `DespawnOnExit(state)` internally, so no teardown here.
-    let state = AppState::S01CharacterController;
     hud::spawn_controls_overlay(&mut commands, state, &["WASD — move", "Esc — back to menu"]);
     hud::spawn_fps_counter(&mut commands, state);
 }
