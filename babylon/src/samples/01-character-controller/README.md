@@ -6,6 +6,11 @@ A kinematic (non-physics) third-person controller built from scratch: a capsule
 mesh parented to a yaw pivot, manual gravity/jump integration, pointer-lock mouse
 look, and a Babylon `FollowCamera` that trails the player.
 
+Input is **not** wired inline here — it goes through the shared `engine/input`
+module (`createInput(scene, canvas)`), which exposes keyboard key-state polling
+(`isKeyDown`) plus accumulated pointer-lock look deltas (`consumeLookX/Y`). This
+sample is the reference consumer of that module.
+
 ## Controls
 
 | Input | Action |
@@ -26,14 +31,27 @@ look, and a Babylon `FollowCamera` that trails the player.
 - The `FollowCamera` smoothing (`cameraAcceleration = 0.08`) lags slightly behind
   fast turns, which reads as natural for third-person but can feel sluggish if you
   crank movement speed.
+- **Where it feels bad**: look is consume-on-frame, so a frame hitch (or a tab
+  that just regained focus) can dump one large `movementX` burst into yaw and
+  snap the heading. There is no smoothing/clamp on the look delta — fine at
+  steady framerate, jarring on a stutter.
 
 ## Babylon-specific gotchas
 
-- `FollowCamera` needs a `lockedTarget` (the player mesh) and does **not** require
-  `attachControl`; it positions itself automatically each frame.
-- Pointer lock is browser-gated: `canvas.requestPointerLock()` must be called from
-  a user gesture (we use the canvas `click`). Read `e.movementX` only while
+- **Shared input via scene observables.** `engine/input` uses
+  `scene.onKeyboardObservable` / `scene.onPointerObservable`, which are owned by
+  the scene and torn down by `scene.dispose()`. The gallery disposes the whole
+  scene on every switch, so this is leak-safe by construction; the module's
+  `dispose()` still removes its observers + the one `document`
+  `pointerlockchange` listener and exits pointer lock if it owns it.
+- **Pointer lock from a gesture.** Lock is engaged from a `POINTERDOWN` (a user
+  gesture, as browsers require) via `engine.enterPointerlock()`, not a raw
+  `canvas.requestPointerLock()`. Look deltas are read only while
   `document.pointerLockElement === canvas`.
+- `FollowCamera` needs a `lockedTarget` (the player mesh) and does **not** require
+  `attachControl`; it positions itself automatically each frame. We avoid mixing
+  camera `attachControl` with manual pointer-lock look — the input module owns
+  the whole look model.
 - Parenting the capsule to a `TransformNode` keeps yaw rotation and translation
   separate from the mesh's own transform, which avoids gimbal surprises.
 - Ground collision here is a simple `y <= 0` clamp — there is no real collider.
