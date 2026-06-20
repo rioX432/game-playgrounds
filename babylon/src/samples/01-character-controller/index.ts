@@ -12,6 +12,7 @@ import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/capsuleBuilder";
 
 import { createInput } from "../../engine/input";
+import { createHud } from "../../engine/hud";
 import type { Sample, SampleContext } from "../types";
 
 /**
@@ -89,6 +90,17 @@ function sample01Mount(ctx: SampleContext): () => void {
   camera.cameraAcceleration = 0.08;
   camera.maxCameraSpeed = 20;
 
+  // --- HUD (shared module: controls overlay bottom-left + FPS top-right) ---
+  const hud = createHud(ctx, {
+    title: "Controls",
+    controls: [
+      "WASD — move",
+      "Mouse — look (click to lock pointer)",
+      "Space — jump",
+      "Esc — release pointer",
+    ],
+  });
+
   // --- Input (shared module: keyboard state + pointer-lock look) ---
   const input = createInput(ctx);
   let yaw = 0;
@@ -143,10 +155,12 @@ function sample01Mount(ctx: SampleContext): () => void {
 
   // --- Dispose ---
   // The shared input controller removes its own observers + DOM listener and
-  // releases pointer lock if owned. The render observer is scene-owned (cleared
-  // by scene.dispose), but we detach it here too for tidy, leak-free teardown.
+  // releases pointer lock if owned. The HUD removes its overlay DOM nodes + FPS
+  // observer. The render observer is scene-owned (cleared by scene.dispose), but
+  // we detach it here too for tidy, leak-free teardown.
   return () => {
     input.dispose();
+    hud.dispose();
     scene.onBeforeRenderObservable.remove(updateObserver);
   };
 }

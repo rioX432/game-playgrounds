@@ -11,6 +11,12 @@ module (`createInput(scene, canvas)`), which exposes keyboard key-state polling
 (`isKeyDown`) plus accumulated pointer-lock look deltas (`consumeLookX/Y`). This
 sample is the reference consumer of that module.
 
+The on-screen overlay also comes from the shared `engine/hud` module
+(`createHud(ctx, { title, controls })`): a controls list pinned bottom-left and a
+live FPS counter top-right. The HUD is plain DOM (no Babylon GUI), attaches to the
+canvas's parent, and removes all of its nodes + the FPS observer on dispose. This
+sample is the reference consumer of that module too.
+
 ## Controls
 
 | Input | Action |
@@ -35,6 +41,10 @@ sample is the reference consumer of that module.
   that just regained focus) can dump one large `movementX` burst into yaw and
   snap the heading. There is no smoothing/clamp on the look delta — fine at
   steady framerate, jarring on a stutter.
+- **HUD feel**: the FPS readout is throttled to ~4 updates/sec so the number is
+  readable, but that also means it lags a real spike — a single dropped frame is
+  smoothed away in `engine.getFps()` (an exponential average) and you won't see
+  it. Good for an at-a-glance health check, useless as a frame-time profiler.
 
 ## Babylon-specific gotchas
 
