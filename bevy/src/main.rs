@@ -10,11 +10,13 @@
 //! Verify (fastest):                cargo check
 //! Headless tests (no window):      cargo test
 
+mod engine;
 mod samples;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
+use engine::input::FoundationInputPlugin;
 use samples::{all, register_samples, AppState, SampleEntry};
 
 /// Marks an entity belonging to the menu screen (despawned on leaving Menu).
@@ -38,6 +40,9 @@ fn main() {
     // Physics. `RapierPhysicsPlugin::<NoUserData>::default()` registers the
     // default Rapier context entity used by `ReadRapierContext`.
     .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+    // Shared foundation input (keyboard intent + pointer-lock mouse look).
+    // Added ONCE here; samples READ its resources (see `engine/input.rs`).
+    .add_plugins(FoundationInputPlugin)
     .init_state::<AppState>()
     // Menu lifecycle.
     .add_systems(OnEnter(AppState::Menu), spawn_menu)

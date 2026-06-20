@@ -18,8 +18,14 @@
 //!     `PbrBundle` is gone.
 //!   * Scoped cleanup uses `DespawnOnExit(state)` (0.18), NOT `StateScoped`.
 //!   * `Time` delta is `time.delta_secs()` (f32), not the old `delta_seconds()`.
+//!
+//! **Shared input:** movement reads the global [`MoveIntent`] resource owned by
+//! `engine::input::FoundationInputPlugin` instead of polling `ButtonInput` here,
+//! so every sample shares one keyboard-intent definition.
 
 use bevy::prelude::*;
+
+use crate::engine::input::MoveIntent;
 
 use super::{AppState, SampleMeta};
 
@@ -105,33 +111,20 @@ fn setup(
     ));
 }
 
-/// Moves the player on the XZ plane from WASD. Camera-relative would need the
-/// camera yaw; for this minimal version we use world axes (W = -Z).
+/// Moves the player on the XZ plane from the shared [`MoveIntent`] (world axes,
+/// W = -Z). The intent is already normalized by the shared input module, so this
+/// sample only scales it by speed and frame time.
 fn move_player(
     time: Res<Time>,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    intent: Res<MoveIntent>,
     mut query: Query<&mut Transform, With<Player>>,
 ) {
     let Ok(mut transform) = query.single_mut() else {
         return;
     };
 
-    let mut dir = Vec3::ZERO;
-    if keyboard.pressed(KeyCode::KeyW) {
-        dir.z -= 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyS) {
-        dir.z += 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyA) {
-        dir.x -= 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyD) {
-        dir.x += 1.0;
-    }
-
-    if dir != Vec3::ZERO {
-        transform.translation += dir.normalize() * MOVE_SPEED * time.delta_secs();
+    if intent.dir != Vec3::ZERO {
+        transform.translation += intent.dir * MOVE_SPEED * time.delta_secs();
     }
 }
 
@@ -151,17 +144,18 @@ fn follow_camera(
 mod tests {
     use super::*;
 
-    /// Headless proof that WASD updates the player Transform (no window/GPU).
+    /// Headless proof that the player Transform advances from the shared
+    /// `MoveIntent` resource (no window/GPU). Mirrors the shared input path:
+    /// the global plugin populates `MoveIntent`; this sample consumes it.
     #[test]
-    fn move_player_advances_transform_on_input() {
+    fn move_player_advances_transform_from_intent() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
-        app.init_resource::<ButtonInput<KeyCode>>();
 
-        // Press W.
-        app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyW);
+        // Forward intent (W = -Z), already normalized as the shared module does.
+        app.insert_resource(MoveIntent {
+            dir: Vec3::new(0.0, 0.0, -1.0),
+        });
 
         let player = app
             .world_mut()
@@ -174,6 +168,6 @@ mod tests {
         app.update();
 
         let z = app.world().get::<Transform>(player).unwrap().translation.z;
-        assert!(z < 0.0, "pressing W should move the player toward -Z, got z={z}");
+        assert!(z < 0.0, "forward intent should move the player toward -Z, got z={z}");
     }
 }

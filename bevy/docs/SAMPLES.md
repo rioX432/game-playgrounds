@@ -27,7 +27,7 @@ Status: ✅ done · ⬜ todo (→ GitHub issue)
 ## Foundation (build first — shrinks every later sample)
 | Issue | Title | Depends | What it adds |
 |-------|-------|---------|--------------|
-| F1 | Shared input plugin (keyboard + pointer-lock mouse look) + refactor sample 01 | — | reusable `input` module/plugin |
+| F1 ✅ | Shared input plugin (keyboard + pointer-lock mouse look) + refactor sample 01 | — | reusable `engine/input` module/plugin |
 | F2 | Shared HUD plugin (controls overlay + FPS via `FrameTimeDiagnosticsPlugin`) | — | reusable `hud` plugin |
 | F3 | Shared scene-primitives helper (ground plane, box grid, light preset) | — | reusable `prims` helpers |
 
