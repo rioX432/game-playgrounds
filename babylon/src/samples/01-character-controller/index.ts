@@ -11,12 +11,16 @@ import "@babylonjs/core/Meshes/Builders/groundBuilder";
 import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/capsuleBuilder";
 
+import { createInput } from "../../engine/input";
 import type { Sample, SampleContext } from "../types";
 
 /**
  * Manually-integrated third-person controller. We deliberately avoid Babylon's
  * built-in PhysicsCharacterController here so this sample has zero physics-engine
  * dependency and the "feel" is fully in our hands (see README).
+ *
+ * Input is delegated to the shared `engine/input` module (keyboard state +
+ * pointer-lock look) so every sample shares one leak-safe input model.
  */
 const GRAVITY = -22; // units / s^2, tuned for a snappy arcade jump
 const MOVE_SPEED = 6; // units / s
@@ -24,7 +28,7 @@ const JUMP_SPEED = 9; // initial upward velocity
 const LOOK_SENSITIVITY = 0.0025;
 
 function sample01Mount(ctx: SampleContext): () => void {
-  const { scene, canvas } = ctx;
+  const { scene } = ctx;
   scene.clearColor.set(0.6, 0.75, 0.9, 1);
 
   // --- Lighting ---
@@ -85,47 +89,29 @@ function sample01Mount(ctx: SampleContext): () => void {
   camera.cameraAcceleration = 0.08;
   camera.maxCameraSpeed = 20;
 
-  // --- Input state ---
-  const keys: Record<string, boolean> = {};
+  // --- Input (shared module: keyboard state + pointer-lock look) ---
+  const input = createInput(ctx);
   let yaw = 0;
   let verticalVelocity = 0;
   let grounded = true;
   const groundY = capsuleHeight / 2;
-
-  const onKeyDown = (e: KeyboardEvent): void => {
-    keys[e.code] = true;
-  };
-  const onKeyUp = (e: KeyboardEvent): void => {
-    keys[e.code] = false;
-  };
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
-
-  // --- Pointer-lock mouse look ---
-  const onCanvasClick = (): void => {
-    void canvas.requestPointerLock?.();
-  };
-  const onMouseMove = (e: MouseEvent): void => {
-    if (document.pointerLockElement !== canvas) return;
-    yaw += e.movementX * LOOK_SENSITIVITY;
-  };
-  canvas.addEventListener("click", onCanvasClick);
-  document.addEventListener("mousemove", onMouseMove);
 
   // --- Per-frame update ---
   const update = (): void => {
     const dt = scene.getEngine().getDeltaTime() / 1000;
     if (dt <= 0) return;
 
+    // Apply accumulated pointer-lock look to the yaw heading.
+    yaw += input.consumeLookX() * LOOK_SENSITIVITY;
     yawPivot.rotation.y = yaw;
 
     // Build a movement vector in the player's local frame, then rotate by yaw.
     let forward = 0;
     let strafe = 0;
-    if (keys["KeyW"]) forward += 1;
-    if (keys["KeyS"]) forward -= 1;
-    if (keys["KeyD"]) strafe += 1;
-    if (keys["KeyA"]) strafe -= 1;
+    if (input.isKeyDown("KeyW")) forward += 1;
+    if (input.isKeyDown("KeyS")) forward -= 1;
+    if (input.isKeyDown("KeyD")) strafe += 1;
+    if (input.isKeyDown("KeyA")) strafe -= 1;
 
     if (forward !== 0 || strafe !== 0) {
       const len = Math.hypot(forward, strafe);
@@ -140,7 +126,7 @@ function sample01Mount(ctx: SampleContext): () => void {
     }
 
     // Jump + gravity.
-    if (keys["Space"] && grounded) {
+    if (input.isKeyDown("Space") && grounded) {
       verticalVelocity = JUMP_SPEED;
       grounded = false;
     }
@@ -153,17 +139,15 @@ function sample01Mount(ctx: SampleContext): () => void {
     }
     void groundY;
   };
-  scene.onBeforeRenderObservable.add(update);
+  const updateObserver = scene.onBeforeRenderObservable.add(update);
 
   // --- Dispose ---
+  // The shared input controller removes its own observers + DOM listener and
+  // releases pointer lock if owned. The render observer is scene-owned (cleared
+  // by scene.dispose), but we detach it here too for tidy, leak-free teardown.
   return () => {
-    window.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("keyup", onKeyUp);
-    canvas.removeEventListener("click", onCanvasClick);
-    document.removeEventListener("mousemove", onMouseMove);
-    if (document.pointerLockElement === canvas) {
-      document.exitPointerLock?.();
-    }
+    input.dispose();
+    scene.onBeforeRenderObservable.remove(updateObserver);
   };
 }
 
