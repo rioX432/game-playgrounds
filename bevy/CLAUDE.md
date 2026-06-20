@@ -26,6 +26,9 @@ cargo run                                  # normal (static) run — slower link
 src/
   main.rs                       — App builder: DefaultPlugins + RapierPhysicsPlugin,
                                   menu UI (Bevy UI list), state-driven sample switching
+  engine/                       — shared foundation plugins added ONCE in main.rs
+    input.rs                    — FoundationInputPlugin: MoveIntent/LookState +
+                                  pointer-lock; samples READ its resources
   samples/
     mod.rs                      — SampleMeta + AppState + registry (THE CONTRACT)
     s01_character_controller.rs — capsule WASD + follow camera + ground
