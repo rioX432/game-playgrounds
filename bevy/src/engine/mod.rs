@@ -5,4 +5,5 @@
 //! provide cross-cutting infrastructure (input, and later HUD, scene primitives)
 //! that every sample can read.
 
+pub mod hud;
 pub mod input;
