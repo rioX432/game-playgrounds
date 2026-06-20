@@ -1,16 +1,16 @@
 import {
-  BoxGeometry,
   CapsuleGeometry,
-  Color,
-  DirectionalLight,
-  HemisphereLight,
   Mesh,
   MeshStandardMaterial,
-  PlaneGeometry,
   Vector3,
 } from "three";
 import { Hud } from "../../engine/hud";
 import { InputController } from "../../engine/input";
+import {
+  createBoxGrid,
+  createGround,
+  createLightPreset,
+} from "../../engine/scene";
 import type { Sample, SampleContext } from "../types";
 
 // Tuning constants (no magic numbers in the logic below).
@@ -24,6 +24,10 @@ const INITIAL_PITCH = 0.2;
 const PITCH_CLAMP: [number, number] = [-0.4, 1.2];
 const CAMERA_DISTANCE = 6;
 const CAMERA_HEIGHT = 3;
+const SCENE_BACKGROUND = 0x101418;
+// Box grid laid out as spatial reference; spacing leaves room to walk between.
+const GRID_COUNT = 4;
+const GRID_SPACING = 5;
 
 const sample: Sample = {
   id: "01-character-controller",
@@ -34,31 +38,15 @@ const sample: Sample = {
 
   mount(ctx: SampleContext): () => void {
     const { scene, camera, canvas } = ctx;
-    scene.background = new Color(0x101418);
 
-    // Lights.
-    const hemi = new HemisphereLight(0xbfd4ff, 0x202020, 0.9);
-    scene.add(hemi);
-    const dir = new DirectionalLight(0xffffff, 1.4);
-    dir.position.set(5, 10, 4);
-    scene.add(dir);
-
-    // Ground.
-    const ground = new Mesh(
-      new PlaneGeometry(60, 60),
-      new MeshStandardMaterial({ color: 0x2a3b2f }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
-
-    // A few static boxes for spatial reference.
-    const boxMat = new MeshStandardMaterial({ color: 0x8a6d3b });
-    for (let i = 0; i < 6; i++) {
-      const box = new Mesh(new BoxGeometry(1.5, 1.5, 1.5), boxMat);
-      const angle = (i / 6) * Math.PI * 2;
-      box.position.set(Math.cos(angle) * 8, 0.75, Math.sin(angle) * 8);
-      scene.add(box);
-    }
+    // Shared scene primitives (F3): light preset + ground + box grid. Each
+    // returns a PrimitiveSet that owns its GPU resources and is disposed below.
+    const lights = createLightPreset(scene, { background: SCENE_BACKGROUND });
+    const ground = createGround(scene);
+    const boxGrid = createBoxGrid(scene, {
+      count: GRID_COUNT,
+      spacing: GRID_SPACING,
+    });
 
     // Player capsule.
     const player = new Mesh(
@@ -165,6 +153,12 @@ const sample: Sample = {
       cancelAnimationFrame(raf);
       input.dispose();
       hud.dispose();
+      // Tear down shared primitives (frees their geometries/materials and
+      // removes their groups). The player mesh is owned by the sample; the
+      // engine disposes remaining scene meshes on switch.
+      lights.dispose();
+      ground.dispose();
+      boxGrid.dispose();
     };
   },
 };

@@ -17,6 +17,16 @@ gallery's top-left title card) and a live FPS counter (top-right). The HUD owns 
 called once per update tick to advance the FPS readout, and `hud.dispose()`
 removes all of its DOM on sample switch — no leaked nodes.
 
+It is also the first consumer of the **shared scene primitives module**
+(`src/engine/scene.ts`): `createLightPreset` (hemisphere fill + directional
+key, plus the background color), `createGround` (flat XZ plane), and
+`createBoxGrid` (a `count x count` grid of reference cubes). Each helper returns
+a `PrimitiveSet` — a root `THREE.Group` already added to the scene plus an
+idempotent `dispose()` that removes the group AND frees every geometry/material
+it created. The sample's cleanup just calls `lights.dispose()` /
+`ground.dispose()` / `boxGrid.dispose()`; the stage boilerplate (and its GPU
+cleanup) no longer lives inline.
+
 ## Controls
 - **Click canvas** — engage pointer lock.
 - **Mouse** — look (yaw + clamped pitch).
@@ -43,6 +53,21 @@ removes all of its DOM on sample switch — no leaked nodes.
   return — there is no "remember held keys".
 - Difficulty: **low**. Pure kinematics, no collision solver.
 
+### Scene primitives (F3) feel notes
+- The box grid replaces the old hand-placed ring of 6 boxes. A regular grid
+  reads as a clear spatial reference and gives obvious parallax while walking,
+  but it feels **less interesting to navigate** than the ring — there is no
+  focal center to orbit, just a lattice. For a movement playground a grid is the
+  honest, neutral choice; for showcasing the follow camera a ring framed the
+  player better.
+- **Where it feels bad:** the box grid shares ONE geometry + ONE material across
+  every cube (cheap and correctly disposed once), so every box is visually
+  identical — there's no per-box tint to judge distance/depth at a glance.
+  That's the right tradeoff for a foundation primitive, but a real level would
+  want variation. The preset lighting is flat-ish (single directional key, no
+  shadows), so cubes read as silhouettes against the ground without grounding
+  contact shadows — depth perception near the floor is weaker than it should be.
+
 ## Three.js-specific gotchas
 - `PointerLockControls` exists in `three/examples`, but here lock is wired
   manually inside `InputController` to keep things dependency-free and expose
@@ -55,6 +80,13 @@ removes all of its DOM on sample switch — no leaked nodes.
 - Listener leaks: this sample used to register 4 listeners inline. They now live
   in `InputController`; the single `input.dispose()` removes them all — the
   pattern future input-driven samples should reuse.
+- GPU resource leaks: removing a mesh from a scene does NOT free its
+  `BufferGeometry`/`Material` — those hold GPU memory until `.dispose()` is
+  called, and Three never auto-disposes them. The F3 `PrimitiveSet` tracks every
+  geometry/material it creates in an internal cleanup stack and frees them on
+  `dispose()` (idempotent). It disposes only what it created and never
+  traverse-disposes arbitrary scene descendants, so it can't accidentally free
+  the sample-owned player mesh.
 - HUD overlay: `Hud` attaches its root to `canvas.parentElement` (the
   `position: relative` `#stage`), not `document.body`, so it overlays the 3D
   view rather than the whole page. It uses `pointer-events: none` so it never
