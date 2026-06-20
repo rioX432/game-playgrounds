@@ -9,6 +9,7 @@ import {
   PlaneGeometry,
   Vector3,
 } from "three";
+import { Hud } from "../../engine/hud";
 import { InputController } from "../../engine/input";
 import type { Sample, SampleContext } from "../types";
 
@@ -75,6 +76,20 @@ const sample: Sample = {
       pitchClamp: PITCH_CLAMP,
     });
 
+    // Shared HUD module: controls overlay + FPS counter. Attaches over the
+    // canvas (its parent is the positioned #stage) and is removed on dispose.
+    const hud = new Hud({
+      container: canvas.parentElement ?? undefined,
+      title: "Character Controller",
+      controls: [
+        "Click canvas — lock mouse",
+        "WASD — move",
+        "Mouse — look",
+        "Space — jump",
+        "Esc — release mouse",
+      ],
+    });
+
     // Movement / physics state owned by the sample.
     let velocityY = 0;
     let grounded = true;
@@ -90,6 +105,8 @@ const sample: Sample = {
       raf = requestAnimationFrame(update);
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
+
+      hud.frame(now);
 
       const yaw = input.yaw;
       const pitch = input.pitch;
@@ -147,6 +164,7 @@ const sample: Sample = {
     return () => {
       cancelAnimationFrame(raf);
       input.dispose();
+      hud.dispose();
     };
   },
 };

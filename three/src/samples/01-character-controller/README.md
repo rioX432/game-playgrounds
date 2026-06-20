@@ -11,6 +11,12 @@ It is also the first consumer of the **shared input module**
 listeners live inside the controller and are removed on `input.dispose()`, so
 the sample's own cleanup is just "cancel the RAF, dispose the input".
 
+It additionally demonstrates the **shared HUD module**
+(`src/engine/hud.ts`, `Hud`): a controls/help overlay (top-left) and a live FPS
+counter (top-right). The HUD owns every DOM node it creates; `hud.frame(now)` is
+called once per update tick to advance the FPS readout, and `hud.dispose()`
+removes all of its DOM on sample switch — no leaked nodes.
+
 ## Controls
 - **Click canvas** — engage pointer lock.
 - **Mouse** — look (yaw + clamped pitch).
@@ -49,3 +55,16 @@ the sample's own cleanup is just "cancel the RAF, dispose the input".
 - Listener leaks: this sample used to register 4 listeners inline. They now live
   in `InputController`; the single `input.dispose()` removes them all — the
   pattern future input-driven samples should reuse.
+- HUD overlay: `Hud` attaches its root to `canvas.parentElement` (the
+  `position: relative` `#stage`), not `document.body`, so it overlays the 3D
+  view rather than the whole page. It uses `pointer-events: none` so it never
+  steals the click that engages pointer lock. A single `hud.dispose()` removes
+  the whole subtree; on rapid sample switching no stale FPS counters pile up.
+
+## Where the HUD feels bad
+- The FPS readout refreshes on a 250ms cadence (smoothed average), so a
+  one-frame hitch is invisible in the number — good for steady-state reading,
+  bad for catching a single stutter. A frame-time graph would show spikes the
+  averaged number hides.
+- The controls overlay is static text with no toggle/collapse; on small
+  viewports it overlaps the scene and there is no key to hide it yet.
