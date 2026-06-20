@@ -17,7 +17,7 @@ export interface HudOptions {
    * containing element is the typical choice. Defaults to `document.body`.
    */
   container?: HTMLElement;
-  /** Lines describing the controls, shown in the help overlay (top-left). */
+  /** Lines describing the controls, shown in the help overlay (bottom-left). */
   controls?: string[];
   /** Optional heading above the controls list. */
   title?: string;
@@ -96,7 +96,8 @@ export class Hud {
   ): HTMLDivElement {
     const panel = document.createElement("div");
     Object.assign(panel.style, this.panelBaseStyle());
-    Object.assign(panel.style, { top: "12px", left: "12px" });
+    // Bottom-left so it never collides with the gallery's top-left overlay card.
+    Object.assign(panel.style, { bottom: "12px", left: "12px" });
 
     if (title) {
       const heading = document.createElement("div");

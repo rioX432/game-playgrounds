@@ -78,9 +78,9 @@ const sample: Sample = {
 
     // Shared HUD module: controls overlay + FPS counter. Attaches over the
     // canvas (its parent is the positioned #stage) and is removed on dispose.
+    // No `title`: the gallery's overlay card already shows the sample name.
     const hud = new Hud({
       container: canvas.parentElement ?? undefined,
-      title: "Character Controller",
       controls: [
         "Click canvas — lock mouse",
         "WASD — move",

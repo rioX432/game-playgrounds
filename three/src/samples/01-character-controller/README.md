@@ -12,8 +12,8 @@ listeners live inside the controller and are removed on `input.dispose()`, so
 the sample's own cleanup is just "cancel the RAF, dispose the input".
 
 It additionally demonstrates the **shared HUD module**
-(`src/engine/hud.ts`, `Hud`): a controls/help overlay (top-left) and a live FPS
-counter (top-right). The HUD owns every DOM node it creates; `hud.frame(now)` is
+(`src/engine/hud.ts`, `Hud`): a controls/help overlay (bottom-left, clear of the
+gallery's top-left title card) and a live FPS counter (top-right). The HUD owns every DOM node it creates; `hud.frame(now)` is
 called once per update tick to advance the FPS readout, and `hud.dispose()`
 removes all of its DOM on sample switch — no leaked nodes.
 
