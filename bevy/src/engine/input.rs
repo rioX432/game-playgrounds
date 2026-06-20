@@ -81,10 +81,15 @@ impl Plugin for FoundationInputPlugin {
             .init_resource::<PointerLock>()
             // Release the cursor + reset state when returning to the menu.
             .add_systems(OnEnter(AppState::Menu), release_input)
-            // Per-frame input population, only while inside a sample.
+            // Per-frame input population, only while inside a sample. Ordered so
+            // `update_look` runs BEFORE `grab_cursor_on_sample_enter`: on the
+            // first sample frame the pointer is not yet locked, so look skips the
+            // mouse motion accumulated during the menu click; the grab then
+            // engages and look starts accumulating from the next frame.
             .add_systems(
                 Update,
-                (grab_cursor_on_sample_enter, update_move_intent, update_look)
+                (update_move_intent, update_look, grab_cursor_on_sample_enter)
+                    .chain()
                     .run_if(not(in_state(AppState::Menu))),
             );
     }
@@ -141,7 +146,20 @@ fn read_wasd(keyboard: &ButtonInput<KeyCode>) -> Vec3 {
 /// Accumulates yaw/pitch from this frame's mouse delta into [`LookState`] and
 /// stores the raw delta. The delta is reset to zero every frame regardless of
 /// motion so it never leaks into a later frame (or a later sample).
-fn update_look(mouse_motion: Res<AccumulatedMouseMotion>, mut look: ResMut<LookState>) {
+///
+/// Look only accumulates while the pointer is locked. This skips the very first
+/// sample frame (lock not yet engaged — see system ordering in [`Plugin::build`])
+/// so the mouse motion accumulated during the menu click never produces a
+/// one-frame camera jolt on sample entry.
+fn update_look(
+    pointer: Res<PointerLock>,
+    mouse_motion: Res<AccumulatedMouseMotion>,
+    mut look: ResMut<LookState>,
+) {
+    if !pointer.locked {
+        look.delta = Vec2::ZERO;
+        return;
+    }
     let delta = mouse_motion.delta;
     look.delta = delta;
     look.yaw -= delta.x * LOOK_SENSITIVITY;
@@ -204,6 +222,33 @@ mod tests {
     fn move_intent_is_zero_with_no_keys() {
         let kb = ButtonInput::<KeyCode>::default();
         assert_eq!(read_wasd(&kb), Vec3::ZERO);
+    }
+
+    /// `update_look` ignores mouse motion until the pointer is locked, so the
+    /// menu-click motion on the first sample frame cannot jolt the camera.
+    #[test]
+    fn look_skips_until_pointer_locked() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<AccumulatedMouseMotion>();
+        app.init_resource::<LookState>();
+        app.insert_resource(PointerLock { locked: false });
+        app.world_mut().resource_mut::<AccumulatedMouseMotion>().delta = Vec2::new(50.0, 20.0);
+        app.add_systems(Update, update_look);
+
+        // Not locked yet: the accumulated menu motion must be ignored.
+        app.update();
+        let look = *app.world().resource::<LookState>();
+        assert_eq!(look.yaw, 0.0, "look must not accumulate while unlocked");
+        assert_eq!(look.pitch, 0.0);
+        assert_eq!(look.delta, Vec2::ZERO);
+
+        // Once locked, the same delta drives yaw/pitch.
+        app.world_mut().resource_mut::<PointerLock>().locked = true;
+        app.world_mut().resource_mut::<AccumulatedMouseMotion>().delta = Vec2::new(50.0, 20.0);
+        app.update();
+        let look = *app.world().resource::<LookState>();
+        assert!(look.yaw != 0.0, "look must accumulate once locked");
     }
 
     /// `release_input` resets accumulated look + intent + pointer lock to
