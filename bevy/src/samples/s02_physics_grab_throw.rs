@@ -16,11 +16,12 @@
 //!
 //! **Bevy 0.18 / rapier 0.34 gotchas:**
 //!   * Raycast goes through the `ReadRapierContext` SystemParam:
-//!     `rapier.single()?.cast_ray(origin, dir, max_toi, solid)` returns
+//!     `rapier.single()?.cast_ray(origin, dir, max_toi, solid, filter)` returns
 //!     `Option<(Entity, f32)>`. (Older tutorials use `Res<RapierContext>` —
 //!     that resource no longer exists; the context lives on an entity.)
-//!   * `cast_ray` in 0.34 takes NO `QueryFilter` arg (4 args: origin, dir,
-//!     max_toi, solid).
+//!   * The `ReadRapierContext::single()` wrapper's `cast_ray` takes 5 args
+//!     (origin, dir, max_toi, solid, `QueryFilter`). Pass
+//!     `QueryFilter::default()` to query all colliders.
 //!   * Apply force with the `ExternalImpulse { impulse, torque_impulse }`
 //!     component; insert/overwrite it on the hit entity.
 
@@ -140,9 +141,12 @@ fn throw_on_click(
     // Camera looks down -Z in its local frame; forward() returns that in world.
     let dir = cam.forward().as_vec3();
 
-    // 4-arg cast_ray (origin, dir, max_toi, solid). solid=true reports a hit
-    // even if the origin starts inside a shape.
-    if let Some((entity, _toi)) = ctx.cast_ray(origin, dir, RAY_MAX_TOI, true) {
+    // cast_ray(origin, dir, max_toi, solid, filter). solid=true reports a hit
+    // even if the origin starts inside a shape. The `ReadRapierContext` wrapper
+    // takes a `QueryFilter` (use `default()` to query all colliders).
+    if let Some((entity, _toi)) =
+        ctx.cast_ray(origin, dir, RAY_MAX_TOI, true, QueryFilter::default())
+    {
         if let Ok(mut impulse) = throwables.get_mut(entity) {
             impulse.impulse = dir * THROW_IMPULSE;
         }

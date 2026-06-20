@@ -118,7 +118,9 @@ working Bevy 0.18 game) — see AI-agent rules below.
   older `StateScoped`. Add `.init_state::<S>()`; the despawn system is built in.
 - **Rapier 0.34 raycast goes through `ReadRapierContext`** (a SystemParam), not
   `Res<RapierContext>`. Call `rapier.single()?.cast_ray(origin, dir, max_toi,
-  solid)` → `Option<(Entity, f32)>`. `cast_ray` here takes **no** `QueryFilter`.
+  solid, QueryFilter::default())` → `Option<(Entity, f32)>`. The
+  `ReadRapierContext` wrapper's `cast_ray` takes a 5th `QueryFilter` arg (the
+  lower-level `RapierContext::cast_ray` omits it — don't confuse the two).
 - **`Image.data` is `Option<Vec<u8>>`** in 0.18 (was `Vec<u8>`). Build textures
   with `Image::new_fill(Extent3d, TextureDimension::D2, &pixel, TextureFormat,
   RenderAssetUsages::all())`; `Extent3d`/`TextureDimension`/`TextureFormat` are

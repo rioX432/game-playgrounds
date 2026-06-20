@@ -19,7 +19,12 @@ pub mod s03_paint_on_mesh;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
+///
+/// `id`/`tags` are part of the public sample contract (used for deep-linking,
+/// logging, and search by tooling) even though the current minimal menu only
+/// renders `title`/`summary` — hence `allow(dead_code)`.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct SampleMeta {
     /// Stable kebab-ish id, also used for deep-linking / logging.
     pub id: &'static str,

@@ -152,7 +152,8 @@ fn paint_on_click(
     let origin = cam.translation();
     let dir = cam.forward().as_vec3();
 
-    let Some((entity, toi)) = ctx.cast_ray(origin, dir, 100.0, true) else {
+    let Some((entity, toi)) = ctx.cast_ray(origin, dir, 100.0, true, QueryFilter::default())
+    else {
         return;
     };
     let Ok((paint, surface_xform)) = paintable.get(entity) else {
