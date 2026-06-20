@@ -1,0 +1,26 @@
+[package]
+name = "bevy-playground"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Bevy 0.18 — pinned to match the reference project `avvy-world`.
+# IMPORTANT: LLM training data often contains OLD Bevy APIs (pre-0.15 bundles,
+# `SpatialBundle`, `commands.spawn_bundle`, old `Text`/`Style`/`NodeBundle`,
+# `StateScoped`, etc.). Do NOT use them. This project targets 0.18 ONLY.
+bevy = "0.18"
+
+# Physics. dim3 = 3D. Version pinned to match avvy-world's workspace policy.
+bevy_rapier3d = { version = "0.34", features = ["dim3"] }
+
+# --- Fast-iteration compile profiles (safe; no external tools required) ---
+# Build OUR crate with light optimization (fast to compile, fine to debug),
+# but build all DEPENDENCIES (Bevy, etc.) at opt-level 3 so the running game
+# is not unbearably slow. This is the standard Bevy recommendation and does
+# NOT require lld/mold. See `.cargo/config_fast_builds.toml.example` for the
+# (optional) linker speedups that DO require extra tooling.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

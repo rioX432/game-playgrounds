@@ -1,0 +1,137 @@
+{
+  "$schema": "https://claude.ai/schemas/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(pnpm *)",
+      "Bash(yarn *)",
+      "Bash(bun *)",
+      "Bash(vite *)",
+      "Bash(tsc *)",
+      "Bash(eslint *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(rm *.tmp)",
+      "Bash(rm *.log)",
+      "Bash(ls *)",
+      "Bash(which *)",
+      "Bash(curl *)",
+      "Bash(jq *)"
+    ],
+    "deny": [
+      "Bash(cat .env*)",
+      "Bash(echo *secret*)",
+      "Bash(echo *password*)",
+      "Bash(echo *api_key*)",
+      "Bash(curl *credentials*)"
+    ]
+  },
+  "preferences": {
+    "attribution": false
+  },
+  "autoMode": {
+    "hard_deny": [
+      "Never delete production databases or run DROP TABLE",
+      "Never force push to main or master",
+      "Never modify .env files or commit secrets",
+      "Never run rm -rf on project root or home directory"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-dangerous-commands.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-secret-access.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/auto-lint.sh",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/log-failure.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/save-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/log-subagent.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

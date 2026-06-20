@@ -1,0 +1,53 @@
+# Optional fast-linker config for Bevy iteration speed.
+#
+# This file is a REFERENCE ONLY and is intentionally NOT named `config.toml`,
+# so it is INERT — checking it in cannot break a teammate's / CI machine that
+# does not have `lld` or `mold` installed.
+#
+# To enable faster incremental linking (the slowest part of an incremental
+# Rust build), do BOTH:
+#   1. Install a fast linker for your platform (see below).
+#   2. Copy this file to `.cargo/config.toml`:
+#        cp .cargo/config_fast_builds.toml.example .cargo/config.toml
+#      (keep your local `config.toml` out of version control)
+#
+# Source: Bevy's official "Setup / Fast Compiles" guide.
+#   https://bevy.org/learn/quick-start/getting-started/setup/
+
+# ---------------------------------------------------------------------------
+# Linux  — install lld:  sudo apt-get install lld clang   (or mold)
+# ---------------------------------------------------------------------------
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-Clink-arg=-fuse-ld=lld"]
+# Prefer mold if installed (faster than lld); replace the line above with:
+# rustflags = ["-Clink-arg=-fuse-ld=/path/to/mold"]
+
+# ---------------------------------------------------------------------------
+# macOS  — install lld:  brew install llvm
+#          (Apple Silicon path shown; Intel uses /usr/local/opt/llvm/bin)
+# ---------------------------------------------------------------------------
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-Clink-arg=-fuse-ld=/opt/homebrew/opt/llvm/bin/ld64.lld",
+]
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-Clink-arg=-fuse-ld=/usr/local/opt/llvm/bin/ld64.lld",
+]
+
+# ---------------------------------------------------------------------------
+# Windows  — install lld:  cargo install -f cargo-binutils
+#            rustup component add llvm-tools-preview
+# ---------------------------------------------------------------------------
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+rustflags = []
+
+# ---------------------------------------------------------------------------
+# Optional (nightly only): the new parallel rustc front-end. Uncomment if you
+# run a nightly toolchain. Harmless to leave commented on stable.
+# ---------------------------------------------------------------------------
+# [build]
+# rustflags = ["-Zthreads=0"]

@@ -1,0 +1,5 @@
+/target
+.DS_Store
+*.log
+# Local linker config copied from config_fast_builds.toml.example (machine-specific)
+.cargo/config.toml
