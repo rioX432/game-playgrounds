@@ -305,6 +305,17 @@ function sample09Mount(ctx: SampleContext): () => void {
       const dt = scene.getEngine().getDeltaTime() / 1000;
       if (dt <= 0) return;
 
+      // Restore the plank's default prestep AFTER one physics step has consumed
+      // the reset teleport. Babylon steps physics BEFORE onBeforeRender, so doing
+      // this at the TOP of update() (the frame AFTER reset) guarantees exactly one
+      // prestep ran with disablePreStep=false to commit the teleported transform
+      // to the body. Doing it in the same update() as reset() would collapse the
+      // window to zero physics steps and the teleport would never take.
+      if (restorePlankPreStep) {
+        plankAgg.body.disablePreStep = true;
+        restorePlankPreStep = false;
+      }
+
       // Edge-triggered Space (drop / re-attach) and R (reset).
       const spaceDown = input.isKeyDown("Space");
       if (spaceDown && !prevSpace) {
@@ -316,13 +327,6 @@ function sample09Mount(ctx: SampleContext): () => void {
       const rDown = input.isKeyDown("KeyR");
       if (rDown && !prevR) reset();
       prevR = rDown;
-
-      // Restore the plank's default prestep one frame after a reset teleport so
-      // the dynamic simulation drives its transform again (and it can swing).
-      if (restorePlankPreStep) {
-        plankAgg.body.disablePreStep = true;
-        restorePlankPreStep = false;
-      }
 
       // Apply look to the yaw heading.
       yaw += input.consumeLookX() * LOOK_SENSITIVITY;
