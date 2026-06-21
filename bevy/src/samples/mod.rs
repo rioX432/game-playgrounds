@@ -20,6 +20,7 @@ pub mod s04_first_person_controller;
 pub mod s05_spatial_audio;
 pub mod s06_hide_and_seek;
 pub mod s08_red_light_green_light;
+pub mod s09_coop_carry;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -55,6 +56,7 @@ pub enum AppState {
     S05SpatialAudio,
     S06HideAndSeek,
     S08RedLightGreenLight,
+    S09CoopCarry,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -94,6 +96,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s08_red_light_green_light::META,
             state: AppState::S08RedLightGreenLight,
         },
+        SampleEntry {
+            meta: s09_coop_carry::META,
+            state: AppState::S09CoopCarry,
+        },
     ]
 }
 
@@ -108,5 +114,6 @@ pub fn register_samples(app: &mut App) {
         s05_spatial_audio::SpatialAudioPlugin,
         s06_hide_and_seek::HideAndSeekPlugin,
         s08_red_light_green_light::RedLightGreenLightPlugin,
+        s09_coop_carry::CoopCarryPlugin,
     ));
 }
