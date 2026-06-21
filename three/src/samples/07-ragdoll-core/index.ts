@@ -4,6 +4,8 @@ import {
   Mesh,
   MeshStandardMaterial,
   Quaternion,
+  Raycaster,
+  Vector2,
   Vector3,
 } from "three";
 import { Hud } from "../../engine/hud";
@@ -25,6 +27,12 @@ const BONE_DENSITY = 1.0; // uniform density; capsule volume sets per-bone mass
 const BONE_COLOR = 0xd98c5f;
 const BONE_LINEAR_DAMPING = 0.15; // a touch of air drag so it settles
 const BONE_ANGULAR_DAMPING = 0.4; // damp spin so limbs stop flailing forever
+
+// --- Interaction (#12). A click raycasts to a bone and punches it. ---
+// Impulse magnitude (kg·m/s) applied at the hit point along the camera's view
+// direction, so clicking "shoves" the limb away from the viewer. Tuned to clearly
+// knock a ~few-kg bone around without flinging the whole figure off-screen.
+const PUNCH_IMPULSE = 6;
 
 // --- Spawn pose. The ragdoll spawns upright a little above the floor and flops.
 const SPAWN_Y = 4.0; // pelvis height at spawn (drops from here)
@@ -204,10 +212,10 @@ function buildRagdoll(
 
 const sample: Sample = {
   id: "07-ragdoll-core",
-  title: "Ragdoll Core",
+  title: "Ragdoll",
   summary:
-    "REPO-style jank: an 11-capsule humanoid wired with spherical + hinge physics joints drops and flops under gravity. Hinge limits keep elbows/knees from folding the wrong way. Press R to drop it again. (Core for #12.)",
-  tags: ["physics", "rapier", "joints", "ragdoll"],
+    "REPO-style jank: an 11-capsule humanoid wired with spherical + hinge physics joints drops and flops under gravity. Click a limb to punch it (impulse at the hit point); press R to reset to the spawn pose. Hinge limits keep elbows/knees from folding the wrong way.",
+  tags: ["physics", "rapier", "joints", "ragdoll", "interaction"],
 
   mount(ctx: SampleContext): () => void {
     const { scene, camera, canvas } = ctx;
@@ -221,11 +229,11 @@ const sample: Sample = {
 
     const hud = new Hud({
       container: canvas.parentElement ?? undefined,
-      title: "Ragdoll Core",
+      title: "Ragdoll",
       controls: [
-        "R — drop the ragdoll again",
+        "Click a limb — punch it (impulse at the hit point)",
+        "R — reset the ragdoll to the spawn pose",
         "Spherical shoulders/hips/neck + hinged elbows/knees",
-        "Core only — interactions & reset land in #12",
       ],
     });
 
@@ -235,7 +243,7 @@ const sample: Sample = {
     const boneMaterial = new MeshStandardMaterial({ color: BONE_COLOR });
     const boneMeshes: Mesh[] = [];
 
-    // R is read off a plain keydown listener (no InputController needed here).
+    // R resets the ragdoll; read off a plain keydown listener.
     let respawnRequested = false;
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.code === "KeyR") respawnRequested = true;
@@ -247,6 +255,45 @@ const sample: Sample = {
     let raf = 0;
     let world: RAPIER.World | null = null;
     let bones: Map<string, BoneBody> | null = null;
+
+    // --- Click-to-punch picking. Raycast from the camera through the cursor; if
+    // it hits a bone mesh, punch that bone with an impulse at the hit point. ---
+    const raycaster = new Raycaster();
+    const pointerNdc = new Vector2(); // cursor position in normalised device coords
+    const camDir = new Vector3(); // camera forward, reused as the punch direction
+    const onClick = (e: MouseEvent): void => {
+      if (!world || !bones) return; // null-safe: ignore clicks before/after the world
+      // Cursor → NDC (relative to the canvas, not the window).
+      const rect = canvas.getBoundingClientRect();
+      pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointerNdc, camera);
+
+      const boneList = Array.from(bones.values());
+      const hits = raycaster.intersectObjects(
+        boneList.map((b) => b.mesh),
+        false,
+      );
+      if (hits.length === 0) return; // no-hit: never punch a null body
+
+      const hit = hits[0];
+      const target = boneList.find((b) => b.mesh === hit.object);
+      if (!target) return; // mesh not mapped to a bone (shouldn't happen) — bail
+
+      // Punch along the camera's view direction (shove the limb away from us),
+      // applied at the exact hit point so off-centre clicks impart spin.
+      camera.getWorldDirection(camDir);
+      target.rb.applyImpulseAtPoint(
+        new RAPIER.Vector3(
+          camDir.x * PUNCH_IMPULSE,
+          camDir.y * PUNCH_IMPULSE,
+          camDir.z * PUNCH_IMPULSE,
+        ),
+        new RAPIER.Vector3(hit.point.x, hit.point.y, hit.point.z),
+        true, // wake the body
+      );
+    };
+    canvas.addEventListener("click", onClick);
 
     // Spawn orientation: a slight forward lean so it always topples (no balance).
     const spawnQuat = new Quaternion().setFromAxisAngle(
@@ -377,6 +424,7 @@ const sample: Sample = {
       disposed = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKeyDown);
+      canvas.removeEventListener("click", onClick);
       hud.dispose();
 
       // Free the physics world (also frees its bodies/colliders/joints). After
