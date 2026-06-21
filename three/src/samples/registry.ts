@@ -3,6 +3,7 @@ import physicsGrabThrow from "./02-physics-grab-throw/index";
 import paintOnMesh from "./03-paint-on-mesh/index";
 import firstPersonController from "./04-first-person-controller/index";
 import spatialAudio from "./05-spatial-audio/index";
+import hideAndSeekDisguise from "./06-hide-and-seek-disguise/index";
 import type { Sample } from "./types";
 
 /**
@@ -16,4 +17,5 @@ export const samples: Sample[] = [
   paintOnMesh,
   firstPersonController,
   spatialAudio,
+  hideAndSeekDisguise,
 ];
