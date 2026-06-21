@@ -7,6 +7,7 @@ import hideAndSeekDisguise from "./06-hide-and-seek-disguise/index";
 import redLightGreenLight from "./08-red-light-green-light/index";
 import coopCarry from "./09-coop-carry/index";
 import emoteWheel from "./10-emote-wheel/index";
+import topDownTwinStick from "./11-top-down-twin-stick/index";
 import type { Sample } from "./types";
 
 /**
@@ -24,4 +25,5 @@ export const samples: Sample[] = [
   redLightGreenLight,
   coopCarry,
   emoteWheel,
+  topDownTwinStick,
 ];
