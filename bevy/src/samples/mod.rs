@@ -24,6 +24,7 @@ pub mod s08_red_light_green_light;
 pub mod s09_coop_carry;
 pub mod s10_emote_wheel;
 pub mod s11_top_down_twin_stick;
+pub mod s12_tiny_planet;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -63,6 +64,7 @@ pub enum AppState {
     S09CoopCarry,
     S10EmoteWheel,
     S11TwinStick,
+    S12TinyPlanet,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -118,6 +120,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s11_top_down_twin_stick::META,
             state: AppState::S11TwinStick,
         },
+        SampleEntry {
+            meta: s12_tiny_planet::META,
+            state: AppState::S12TinyPlanet,
+        },
     ]
 }
 
@@ -136,5 +142,6 @@ pub fn register_samples(app: &mut App) {
         s09_coop_carry::CoopCarryPlugin,
         s10_emote_wheel::EmoteWheelPlugin,
         s11_top_down_twin_stick::TwinStickPlugin,
+        s12_tiny_planet::TinyPlanetPlugin,
     ));
 }
