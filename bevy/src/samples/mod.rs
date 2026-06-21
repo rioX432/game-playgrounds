@@ -19,6 +19,7 @@ pub mod s03_paint_on_mesh;
 pub mod s04_first_person_controller;
 pub mod s05_spatial_audio;
 pub mod s06_hide_and_seek;
+pub mod s07_ragdoll_core;
 pub mod s08_red_light_green_light;
 pub mod s09_coop_carry;
 pub mod s10_emote_wheel;
@@ -57,6 +58,7 @@ pub enum AppState {
     S04FirstPersonController,
     S05SpatialAudio,
     S06HideAndSeek,
+    S07Ragdoll,
     S08RedLightGreenLight,
     S09CoopCarry,
     S10EmoteWheel,
@@ -97,6 +99,10 @@ pub fn all() -> Vec<SampleEntry> {
             state: AppState::S06HideAndSeek,
         },
         SampleEntry {
+            meta: s07_ragdoll_core::META,
+            state: AppState::S07Ragdoll,
+        },
+        SampleEntry {
             meta: s08_red_light_green_light::META,
             state: AppState::S08RedLightGreenLight,
         },
@@ -125,6 +131,7 @@ pub fn register_samples(app: &mut App) {
         s04_first_person_controller::FirstPersonControllerPlugin,
         s05_spatial_audio::SpatialAudioPlugin,
         s06_hide_and_seek::HideAndSeekPlugin,
+        s07_ragdoll_core::RagdollCorePlugin,
         s08_red_light_green_light::RedLightGreenLightPlugin,
         s09_coop_carry::CoopCarryPlugin,
         s10_emote_wheel::EmoteWheelPlugin,
