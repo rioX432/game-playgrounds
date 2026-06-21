@@ -19,6 +19,7 @@ pub mod s03_paint_on_mesh;
 pub mod s04_first_person_controller;
 pub mod s05_spatial_audio;
 pub mod s06_hide_and_seek;
+pub mod s08_red_light_green_light;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -53,6 +54,7 @@ pub enum AppState {
     S04FirstPersonController,
     S05SpatialAudio,
     S06HideAndSeek,
+    S08RedLightGreenLight,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -88,6 +90,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s06_hide_and_seek::META,
             state: AppState::S06HideAndSeek,
         },
+        SampleEntry {
+            meta: s08_red_light_green_light::META,
+            state: AppState::S08RedLightGreenLight,
+        },
     ]
 }
 
@@ -101,5 +107,6 @@ pub fn register_samples(app: &mut App) {
         s04_first_person_controller::FirstPersonControllerPlugin,
         s05_spatial_audio::SpatialAudioPlugin,
         s06_hide_and_seek::HideAndSeekPlugin,
+        s08_red_light_green_light::RedLightGreenLightPlugin,
     ));
 }
