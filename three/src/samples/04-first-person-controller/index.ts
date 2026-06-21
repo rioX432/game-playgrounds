@@ -24,7 +24,7 @@ const GRID_SPACING = 5;
 // Start the player off-center so the grid is in front, not on top of them.
 const START_X = 0;
 const START_Z = 12;
-const START_YAW = Math.PI; // face toward the grid (-Z)
+const START_YAW = 0; // yaw 0 looks down -Z, toward the grid at the origin
 
 const sample: Sample = {
   id: "04-first-person-controller",
@@ -106,7 +106,10 @@ const sample: Sample = {
 
       // Movement basis from yaw on the horizontal plane (pitch ignored, so
       // looking up/down never lifts or sinks the walk — classic FPS feel).
-      forward.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
+      // Forward must match the camera's view direction: a YXZ-Euler camera at
+      // this yaw looks down (-sin yaw, 0, -cos yaw); `right` is derived from it
+      // so W/S and A/D all move relative to where the player is facing.
+      forward.set(-Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
       right.set(forward.z, 0, -forward.x);
 
       move.set(0, 0, 0);
