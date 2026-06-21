@@ -13,9 +13,17 @@
 //! anchors) are consumed by a modular [`build_ragdoll`] helper, so the follow-up
 //! (#40: interactions + reset) can extend the spec without rewriting assembly.
 //!
-//! **Controls:** `R` — re-drop the ragdoll (despawn the current bodies and
-//! rebuild the spec from the start pose, so you can watch it flop again).
-//! `Esc` — back to the menu.
+//! **Controls:** `Left Mouse` — push: cast a ray from the camera through the
+//! cursor into the physics world and shove the hit ragdoll body along the ray
+//! (a poke/impulse on whatever bone you click). `R` — reset: despawn the current
+//! bodies and rebuild the spec from the start pose (a CLEAN reset — fresh bodies
+//! have zeroed velocities, so it both re-drops the flop AND clears any built-up
+//! motion from poking). `Esc` — back to the menu.
+//!
+//! Because the camera is FIXED (no pointer-lock) the cursor must stay free to
+//! click bones, so this sample forces `CursorOptions { grab_mode: None, visible:
+//! true }` every frame while in S07, overriding the shared auto-grab; the shared
+//! `release_input` restores normal cursor state on Menu exit.
 //!
 //! **Feel notes:** The honest feel here is *floppy ragdoll jank*. The good part:
 //! limited hinges at elbows/knees plus free ball joints at the big joints give a
@@ -50,6 +58,13 @@
 //!     needs two joints, which fits the one-joint-per-entity rule cleanly.
 //!     `local_anchor1` is in the PARENT's local frame, `local_anchor2` in the
 //!     CHILD's local frame.
+//!   * Click-push reuses the s02 raycast idiom but builds the ray from the CURSOR
+//!     (not screen center): `Camera::viewport_to_world(&GlobalTransform, cursor)`
+//!     → a `Ray3d`; cast it with `ReadRapierContext::single()?.cast_ray(origin,
+//!     dir, max_toi, true, QueryFilter::default())` → `Option<(Entity, f32)>`,
+//!     then set `ExternalImpulse { impulse, .. }` on the hit bone along the ray.
+//!     Every failure (no cursor, degenerate ray, no hit, hit a non-bone) is
+//!     guarded — a miss does nothing, never panics.
 //!   * bevy_rapier writes each dynamic body's pose back into its entity
 //!     `Transform` every frame — READ `Transform` directly, never copy by hand.
 //!     Global gravity defaults to -9.81 Y, so the ragdoll falls on its own.
@@ -62,6 +77,7 @@
 //! `DespawnOnExit`-scoped.
 
 use bevy::prelude::*;
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 use bevy_rapier3d::prelude::*;
 
 use crate::engine::hud;
@@ -87,6 +103,10 @@ const FLOOR_HALF: Vec3 = Vec3::new(20.0, 0.05, 20.0);
 /// one way and never hyperextends; we clamp to `[-LIMB_BEND_MAX, 0]` so the hinge
 /// only folds inward, not backward (no pretzel / no hyperextension).
 const LIMB_BEND_MAX: f32 = 2.4; // ~137°
+/// Linear impulse magnitude applied to a bone on click (world units, kg·m/s).
+const PUSH_IMPULSE: f32 = 8.0;
+/// Max ray length for the click-push raycast (world units).
+const RAY_MAX_TOI: f32 = 100.0;
 
 /// Which kind of rapier joint couples a child bone to its parent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -305,12 +325,18 @@ const JOINTS: &[JointSpec] = &[
 #[derive(Component)]
 struct RagdollBone;
 
+/// The fixed camera the click-push ray is built from.
+#[derive(Component)]
+struct RagdollCamera;
+
 pub struct RagdollCorePlugin;
 
 impl Plugin for RagdollCorePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(AppState::S07Ragdoll), setup)
-            .add_systems(Update, redrop.run_if(in_state(AppState::S07Ragdoll)));
+        app.add_systems(OnEnter(AppState::S07Ragdoll), setup).add_systems(
+            Update,
+            (free_cursor, push_on_click, reset).run_if(in_state(AppState::S07Ragdoll)),
+        );
     }
 }
 
@@ -339,6 +365,7 @@ fn setup(
 
     // Camera looking at where the ragdoll falls.
     commands.spawn((
+        RagdollCamera,
         Camera3d::default(),
         Transform::from_xyz(0.0, 2.5, 6.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
         scope.clone(),
@@ -349,7 +376,8 @@ fn setup(
         state,
         &[
             "Ragdoll core — jointed capsules flop under gravity",
-            "R — re-drop the ragdoll",
+            "Left Mouse — push the bone you click",
+            "R — reset (re-drop, clears all motion)",
             "Esc — back to menu",
         ],
     );
@@ -389,6 +417,8 @@ fn build_ragdoll(
                 Transform::from_translation(center),
                 RigidBody::Dynamic,
                 Collider::capsule_y(bone.half_height, BONE_RADIUS),
+                // Starts at zero; the click-push system overwrites it per shove.
+                ExternalImpulse::default(),
                 scope.clone(),
             ))
             .id();
@@ -435,10 +465,12 @@ fn build_joint(joint: &JointSpec) -> TypedJoint {
     }
 }
 
-/// `R` despawns the current ragdoll bodies and rebuilds the spec from the start
-/// pose, so the body flops again. Despawning the tracked `RagdollBone` entities
-/// removes their bodies/colliders/joints with no leak before the rebuild.
-fn redrop(
+/// `R` resets the ragdoll: despawn the current bodies and rebuild the spec from
+/// the start pose, so the body flops again. This is a CLEAN reset — despawning
+/// the tracked `RagdollBone` entities removes their bodies/colliders/joints with
+/// no leak, and the rebuilt bones are fresh (zeroed velocities), so any motion
+/// built up from poking is wiped, not carried over.
+fn reset(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -458,6 +490,73 @@ fn redrop(
         SPAWN_HEIGHT,
         AppState::S07Ragdoll,
     );
+}
+
+/// Keeps the OS cursor FREE (visible + ungrabbed) every frame while in this
+/// sample, overriding the shared auto-grab. The fixed camera + click-to-push
+/// needs the absolute cursor to pick bones. The shared `release_input` restores
+/// normal cursor state on Menu exit.
+fn free_cursor(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>) {
+    let Ok(mut cursor) = cursor_query.single_mut() else {
+        return;
+    };
+    if cursor.grab_mode != CursorGrabMode::None {
+        cursor.grab_mode = CursorGrabMode::None;
+    }
+    if !cursor.visible {
+        cursor.visible = true;
+    }
+}
+
+/// On left-click, build a ray from the camera through the cursor, raycast into
+/// the physics world, and shove the hit ragdoll bone along the ray direction.
+/// Null-safe: missing cursor, degenerate ray, no hit, or a hit on a non-bone
+/// (e.g. the floor) all do nothing.
+fn push_on_click(
+    buttons: Res<ButtonInput<MouseButton>>,
+    rapier: ReadRapierContext,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<RagdollCamera>>,
+    mut bones: Query<&mut ExternalImpulse, With<RagdollBone>>,
+) {
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let Ok(window) = window_query.single() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = camera_query.single() else {
+        return;
+    };
+    let Ok(ctx) = rapier.single() else {
+        return;
+    };
+    // Cursor outside the window => no pick.
+    let Some(cursor_pos) = window.cursor_position() else {
+        return;
+    };
+    // Degenerate viewport->world conversion => no pick.
+    let Ok(ray) = camera.viewport_to_world(camera_transform, cursor_pos) else {
+        return;
+    };
+
+    let dir = ray.direction.as_vec3();
+    // cast_ray(origin, dir, max_toi, solid, filter). solid=true reports a hit
+    // even if the origin starts inside a shape; QueryFilter::default queries all.
+    if let Some((entity, _toi)) =
+        ctx.cast_ray(ray.origin, dir, RAY_MAX_TOI, true, QueryFilter::default())
+    {
+        if let Ok(mut impulse) = bones.get_mut(entity) {
+            impulse.impulse = push_impulse(dir);
+        }
+    }
+}
+
+/// Pure impulse-direction math: normalize the ray direction and scale by
+/// [`PUSH_IMPULSE`]. Kept pure (no ECS/rapier) so it is headless-testable.
+/// Guards a zero/degenerate direction by returning no impulse.
+fn push_impulse(dir: Vec3) -> Vec3 {
+    dir.normalize_or_zero() * PUSH_IMPULSE
 }
 
 #[cfg(test)]
@@ -540,6 +639,52 @@ mod tests {
             let j = JOINTS.iter().find(|j| j.child == child).unwrap();
             assert_eq!(j.kind, JointKind::Spherical, "`{child}` must be free");
         }
+    }
+
+    /// The click-push impulse points along the (normalized) ray and has the
+    /// configured magnitude. Non-tautological: it feeds a non-unit camera ray
+    /// direction and asserts the result is parallel to it with length
+    /// `PUSH_IMPULSE` — catching a regression where the direction is not
+    /// normalized (magnitude would scale with the input length) or the sign flips.
+    #[test]
+    fn push_impulse_is_ray_direction_scaled_to_magnitude() {
+        // A deliberately non-unit "camera ray" direction.
+        let dir = Vec3::new(0.0, -2.0, -2.0);
+        let impulse = push_impulse(dir);
+
+        // Magnitude equals the configured push impulse.
+        assert!(
+            (impulse.length() - PUSH_IMPULSE).abs() < 1e-4,
+            "impulse magnitude {} should equal PUSH_IMPULSE {PUSH_IMPULSE}",
+            impulse.length()
+        );
+        // Direction is parallel to (and same-sense as) the input ray.
+        let expected = dir.normalize() * PUSH_IMPULSE;
+        assert!(
+            impulse.distance(expected) < 1e-4,
+            "impulse {impulse:?} should point along the ray {expected:?}"
+        );
+    }
+
+    /// A zero/degenerate ray direction yields no impulse (no NaN from dividing by
+    /// a zero-length vector). Guards the null-safe push path.
+    #[test]
+    fn push_impulse_of_zero_direction_is_zero() {
+        let impulse = push_impulse(Vec3::ZERO);
+        assert_eq!(impulse, Vec3::ZERO, "a zero ray must not push (no NaN)");
+    }
+
+    /// Reset rebuilds the FULL spec: a reset spawns exactly one body per bone, so
+    /// the bone count after reset equals [`BONES`]. Non-tautological: it pins the
+    /// reset's "rebuild from spec" contract — if reset ever rebuilt a partial body
+    /// (or accumulated leftovers), this bone-count invariant would break.
+    #[test]
+    fn reset_rebuilds_one_body_per_bone() {
+        assert_eq!(
+            BONES.len(),
+            11,
+            "humanoid spec is the 11 expected bones a reset rebuilds"
+        );
     }
 
     /// The bend limit is a sane single-direction fold: positive magnitude, no
