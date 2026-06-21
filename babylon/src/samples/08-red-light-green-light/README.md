@@ -80,9 +80,10 @@ right are the only fiddly parts.
 - **Babylon's forward is +Z; rotate the PARENT.** The doll is a `TransformNode`
   with body/head/face children; facing is one `dollPivot.rotation.y`. The face
   plate is offset on **+Z** (the node's forward) so it reads as "looking at you".
-  Because the player sits on `-Z`, GREEN faces away at `yaw = π` and RED faces
-  the player at `yaw = 0` — the opposite signs from the right-handed Three.js
-  sibling, which is the LH/RH frame difference in a nutshell.
+  Under `rotation.y = θ` the local +Z axis maps to world `(sin θ, 0, cos θ)`.
+  Because the player sits on `-Z`, GREEN faces away at `yaw = 0` (+Z) and RED
+  faces the player at `yaw = π` (−Z) — the opposite signs from the right-handed
+  Three.js sibling, which is the LH/RH frame difference in a nutshell.
 - **`FollowCamera.rotationOffset = 0`** trails the camera on `-Z` (behind the
   player as they walk `+Z`), so we always see the doll's face down-range.
 - **Side-effect builder imports.** `capsule`, `cylinder`, `sphere`, and `box`

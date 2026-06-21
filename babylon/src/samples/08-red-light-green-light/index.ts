@@ -64,10 +64,11 @@ const DOLL_HEAD_Y = 2.7;
 const DOLL_FACE_SIZE = 0.5;
 const DOLL_FACE_DEPTH = 0.2;
 const DOLL_FACE_Z = DOLL_HEAD_RADIUS - 0.05; // plate on +Z side of head (its forward)
-// The doll's local +Z is where its face points. In Babylon (left-handed) the
-// player is at -Z, so yaw=PI faces +Z=away and yaw=0 faces -Z=toward the player.
-const DOLL_FACE_AWAY_YAW = Math.PI; // GREEN: face +Z, away from the player
-const DOLL_FACE_PLAYER_YAW = 0; // RED: face -Z, toward the player
+// The doll's local +Z is where its face points. Under `rotation.y = θ` the local
+// +Z axis maps to world (sin θ, 0, cos θ). The player stands at -Z relative to the
+// doll, so yaw=0 faces +Z=away from the player and yaw=PI faces -Z=toward them.
+const DOLL_FACE_AWAY_YAW = 0; // GREEN: face +Z, away from the player
+const DOLL_FACE_PLAYER_YAW = Math.PI; // RED: face -Z, toward the player
 // How fast the doll eases its facing toward the target, and how fast the
 // background tint eases between phase colors.
 const EASE_RATE = 12; // per second
