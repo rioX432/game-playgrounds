@@ -16,6 +16,7 @@ use bevy::prelude::*;
 pub mod s01_character_controller;
 pub mod s02_physics_grab_throw;
 pub mod s03_paint_on_mesh;
+pub mod s04_first_person_controller;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -47,6 +48,7 @@ pub enum AppState {
     S01CharacterController,
     S02PhysicsGrabThrow,
     S03PaintOnMesh,
+    S04FirstPersonController,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -70,6 +72,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s03_paint_on_mesh::META,
             state: AppState::S03PaintOnMesh,
         },
+        SampleEntry {
+            meta: s04_first_person_controller::META,
+            state: AppState::S04FirstPersonController,
+        },
     ]
 }
 
@@ -80,5 +86,6 @@ pub fn register_samples(app: &mut App) {
         s01_character_controller::CharacterControllerPlugin,
         s02_physics_grab_throw::PhysicsGrabThrowPlugin,
         s03_paint_on_mesh::PaintOnMeshPlugin,
+        s04_first_person_controller::FirstPersonControllerPlugin,
     ));
 }
