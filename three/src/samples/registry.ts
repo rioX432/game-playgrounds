@@ -4,6 +4,7 @@ import paintOnMesh from "./03-paint-on-mesh/index";
 import firstPersonController from "./04-first-person-controller/index";
 import spatialAudio from "./05-spatial-audio/index";
 import hideAndSeekDisguise from "./06-hide-and-seek-disguise/index";
+import ragdollCore from "./07-ragdoll-core/index";
 import redLightGreenLight from "./08-red-light-green-light/index";
 import coopCarry from "./09-coop-carry/index";
 import emoteWheel from "./10-emote-wheel/index";
@@ -22,6 +23,7 @@ export const samples: Sample[] = [
   firstPersonController,
   spatialAudio,
   hideAndSeekDisguise,
+  ragdollCore,
   redLightGreenLight,
   coopCarry,
   emoteWheel,
