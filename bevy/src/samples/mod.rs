@@ -17,6 +17,7 @@ pub mod s01_character_controller;
 pub mod s02_physics_grab_throw;
 pub mod s03_paint_on_mesh;
 pub mod s04_first_person_controller;
+pub mod s05_spatial_audio;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -49,6 +50,7 @@ pub enum AppState {
     S02PhysicsGrabThrow,
     S03PaintOnMesh,
     S04FirstPersonController,
+    S05SpatialAudio,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -76,6 +78,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s04_first_person_controller::META,
             state: AppState::S04FirstPersonController,
         },
+        SampleEntry {
+            meta: s05_spatial_audio::META,
+            state: AppState::S05SpatialAudio,
+        },
     ]
 }
 
@@ -87,5 +93,6 @@ pub fn register_samples(app: &mut App) {
         s02_physics_grab_throw::PhysicsGrabThrowPlugin,
         s03_paint_on_mesh::PaintOnMeshPlugin,
         s04_first_person_controller::FirstPersonControllerPlugin,
+        s05_spatial_audio::SpatialAudioPlugin,
     ));
 }
