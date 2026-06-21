@@ -4,12 +4,20 @@ import { sample02 } from "./02-physics-grab-throw/index";
 import { sample03 } from "./03-paint-on-mesh/index";
 import { sample04 } from "./04-first-person-controller/index";
 import { sample05 } from "./05-spatial-audio/index";
+import { sample06 } from "./06-hide-and-seek-disguise/index";
 
 /**
  * The ordered list of all playground samples. `/dev-all` appends a new entry
  * here after implementing the Sample in its own folder under `src/samples/`.
  */
-export const samples: Sample[] = [sample01, sample02, sample03, sample04, sample05];
+export const samples: Sample[] = [
+  sample01,
+  sample02,
+  sample03,
+  sample04,
+  sample05,
+  sample06,
+];
 
 export function findSample(id: string): Sample | undefined {
   return samples.find((s) => s.id === id);
