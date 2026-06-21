@@ -1,6 +1,7 @@
 import characterController from "./01-character-controller/index";
 import physicsGrabThrow from "./02-physics-grab-throw/index";
 import paintOnMesh from "./03-paint-on-mesh/index";
+import firstPersonController from "./04-first-person-controller/index";
 import type { Sample } from "./types";
 
 /**
@@ -12,4 +13,5 @@ export const samples: Sample[] = [
   characterController,
   physicsGrabThrow,
   paintOnMesh,
+  firstPersonController,
 ];
