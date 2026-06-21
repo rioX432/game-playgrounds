@@ -5,6 +5,7 @@ import { sample03 } from "./03-paint-on-mesh/index";
 import { sample04 } from "./04-first-person-controller/index";
 import { sample05 } from "./05-spatial-audio/index";
 import { sample06 } from "./06-hide-and-seek-disguise/index";
+import { sample08 } from "./08-red-light-green-light/index";
 
 /**
  * The ordered list of all playground samples. `/dev-all` appends a new entry
@@ -17,6 +18,7 @@ export const samples: Sample[] = [
   sample04,
   sample05,
   sample06,
+  sample08,
 ];
 
 export function findSample(id: string): Sample | undefined {
