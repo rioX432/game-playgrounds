@@ -21,6 +21,7 @@ pub mod s05_spatial_audio;
 pub mod s06_hide_and_seek;
 pub mod s08_red_light_green_light;
 pub mod s09_coop_carry;
+pub mod s10_emote_wheel;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -57,6 +58,7 @@ pub enum AppState {
     S06HideAndSeek,
     S08RedLightGreenLight,
     S09CoopCarry,
+    S10EmoteWheel,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -100,6 +102,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s09_coop_carry::META,
             state: AppState::S09CoopCarry,
         },
+        SampleEntry {
+            meta: s10_emote_wheel::META,
+            state: AppState::S10EmoteWheel,
+        },
     ]
 }
 
@@ -115,5 +121,6 @@ pub fn register_samples(app: &mut App) {
         s06_hide_and_seek::HideAndSeekPlugin,
         s08_red_light_green_light::RedLightGreenLightPlugin,
         s09_coop_carry::CoopCarryPlugin,
+        s10_emote_wheel::EmoteWheelPlugin,
     ));
 }
