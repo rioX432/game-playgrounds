@@ -158,6 +158,11 @@ const sample: Sample = {
         // Degenerate only if forward became parallel to up (shouldn't happen
         // with continuous carry); reseed from a world axis as a safety net.
         forward.copy(HEADING_SEED).addScaledVector(up, -HEADING_SEED.dot(up));
+        if (forward.lengthSq() < 1e-8) {
+          // HEADING_SEED was itself parallel to up; an orthogonal world axis is
+          // guaranteed non-degenerate (up cannot be parallel to both).
+          forward.set(1, 0, 0).addScaledVector(up, -up.x);
+        }
       }
       forward.normalize();
       // right = forward x up gives a right-handed tangent frame.
