@@ -5,6 +5,7 @@ import firstPersonController from "./04-first-person-controller/index";
 import spatialAudio from "./05-spatial-audio/index";
 import hideAndSeekDisguise from "./06-hide-and-seek-disguise/index";
 import redLightGreenLight from "./08-red-light-green-light/index";
+import coopCarry from "./09-coop-carry/index";
 import type { Sample } from "./types";
 
 /**
@@ -20,4 +21,5 @@ export const samples: Sample[] = [
   spatialAudio,
   hideAndSeekDisguise,
   redLightGreenLight,
+  coopCarry,
 ];
