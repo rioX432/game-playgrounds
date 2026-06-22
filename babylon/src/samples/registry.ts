@@ -5,6 +5,7 @@ import { sample03 } from "./03-paint-on-mesh/index";
 import { sample04 } from "./04-first-person-controller/index";
 import { sample05 } from "./05-spatial-audio/index";
 import { sample06 } from "./06-hide-and-seek-disguise/index";
+import { sample07 } from "./07-ragdoll-core/index";
 import { sample08 } from "./08-red-light-green-light/index";
 import { sample09 } from "./09-coop-carry/index";
 import { sample10 } from "./10-emote-wheel/index";
@@ -21,6 +22,7 @@ export const samples: Sample[] = [
   sample04,
   sample05,
   sample06,
+  sample07,
   sample08,
   sample09,
   sample10,
