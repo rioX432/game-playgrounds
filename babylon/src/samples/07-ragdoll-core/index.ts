@@ -35,6 +35,12 @@ const BONE_COLOR = new Color3(0.85, 0.55, 0.37);
 const BONE_RESTITUTION = 0.0; // no bounce — it should slap and settle
 const BONE_FRICTION = 0.8; // grippy so limbs don't slide forever on the floor
 
+// --- Interactions (07b). ---
+// One fixed impulse magnitude per click — no charge-up. Tuned so a limb snaps
+// away and the chain follows through without flinging the whole figure offscreen
+// (see the "single fixed magnitude" feel note in the README).
+const PUNCH_IMPULSE = 14;
+
 // --- Per-bone masses (kg). Heavier core, lighter limbs, so it reads as a body
 // collapsing rather than equal sticks. Named so 07b can retune without hunting.
 const MASS_PELVIS = 6;
@@ -311,7 +317,7 @@ export function buildRagdoll(
 }
 
 function sample07Mount(ctx: SampleContext): () => void {
-  const { scene } = ctx;
+  const { scene, canvas } = ctx;
   scene.clearColor.set(0.06, 0.07, 0.1, 1);
 
   let disposed = false;
@@ -338,11 +344,12 @@ function sample07Mount(ctx: SampleContext): () => void {
   const boneMat = new StandardMaterial("ragdollBoneMat", scene);
   boneMat.diffuseColor = BONE_COLOR.clone();
 
-  // --- HUD (controls overlay). 07b adds the punch/reset lines. ---
+  // --- HUD (controls overlay). ---
   const hud = createHud(ctx, {
-    title: "Ragdoll (core)",
+    title: "Ragdoll",
     controls: [
-      "Watch it flop — passive ragdoll under gravity",
+      "Click limb — punch (impulse at hit point, along view dir)",
+      "R — reset to spawn pose",
       "Ball shoulders/hips/neck + hinged elbows/knees",
       "Esc — back",
     ],
@@ -384,6 +391,46 @@ function sample07Mount(ctx: SampleContext): () => void {
       floorAgg.dispose();
       floor.dispose();
     });
+
+    // --- Click-to-punch. Raycast the cursor against ONLY the bone meshes (the
+    // predicate re-reads the CURRENT `ragdoll`, so it follows resets and bails
+    // after dispose). On a hit, shove that bone along the camera view direction
+    // with the impulse applied AT THE HIT POINT — off-centre hits impart spin
+    // because the lever arm to the centre of mass is non-zero. `applyImpulse`
+    // wakes a sleeping Havok body, so a flat, settled figure still reacts.
+    const onPointerDown = (): void => {
+      if (disposed || !ragdoll) return;
+      const hit = scene.pick(scene.pointerX, scene.pointerY, (m) =>
+        ragdoll?.byMesh.has(m as Mesh) ?? false,
+      );
+      if (!hit?.pickedMesh || !hit.pickedPoint) return;
+      const bone = ragdoll.byMesh.get(hit.pickedMesh as Mesh);
+      const camera = scene.activeCamera;
+      if (!bone || !camera) return;
+      const impulse = camera
+        .getForwardRay(1)
+        .direction.normalize()
+        .scale(PUNCH_IMPULSE);
+      bone.aggregate.body.applyImpulse(impulse, hit.pickedPoint);
+    };
+    canvas.addEventListener("pointerdown", onPointerDown);
+    cleanups.push(() =>
+      canvas.removeEventListener("pointerdown", onPointerDown),
+    );
+
+    // --- R to reset (edge-triggered). Tear down the CURRENT ragdoll via its own
+    // dispose (constraints → bodies, no leaked bodies/colliders/constraints) and
+    // rebuild fresh bodies at the spawn pose — a rebuild, not a teleport, so
+    // velocities are zeroed and no prestep workaround is needed. `e.repeat`
+    // guards the browser key-repeat so a held R rebuilds once, not every frame.
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.code !== "KeyR" || e.repeat) return;
+      if (disposed || !ragdoll) return;
+      ragdoll.dispose();
+      ragdoll = buildRagdoll(scene, SPAWN.clone(), boneMat);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    cleanups.push(() => window.removeEventListener("keydown", onKeyDown));
   });
 
   return () => {
@@ -397,7 +444,7 @@ export const sample07: Sample = {
   id: "07-ragdoll-core",
   title: "Ragdoll Core (Havok joints)",
   summary:
-    "REPO-style jank: an 11-capsule humanoid wired with ball + hinge physics joints drops and flops limp under gravity. Hinge limits keep elbows/knees from folding backward. Core only — no punch/reset yet.",
+    "REPO-style jank: an 11-capsule humanoid wired with ball + hinge physics joints drops and flops limp under gravity. Hinge limits keep elbows/knees from folding backward. Click a limb to punch it (impulse at the hit point); R rebuilds it to the spawn pose.",
   tags: ["physics", "havok", "joints", "ragdoll"],
   mount: sample07Mount,
 };
