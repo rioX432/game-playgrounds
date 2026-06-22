@@ -1,54 +1,49 @@
-# Sample Backlog — bevy-playground
+# Sample Catalog — bevy-playground
 
 **engine: bevy** (`bevy 0.18` + `bevy_rapier3d 0.34`)
 
-This is the work-list for `/dev-all`. **Each row below = one GitHub Issue = one PR.**
-Same lineup as the sibling `../three` and `../babylon` playgrounds, ported to Bevy.
-Issues are intentionally small so an AI agent can finish one in a single `/dev`
-run while keeping `main` green.
+All samples in the shared cross-engine lineup are **built and `cargo check`-green**,
+each with at least one headless `#[test]`. This file is the catalog of what exists;
+the same lineup is implemented in `../three` and `../babylon`. For the cross-engine
+findings, see [`../../COMPARISON.md`](../../COMPARISON.md).
 
-## Sizing rules
-- One issue = one coherent change that leaves `cargo check` green = exactly one PR.
-- **Foundation** issues (shared helpers/plugins) are built first; samples depend
-  on them (`depends on #N`).
-- A **heavy** sample is split into `core` + `polish` issues.
-- Definition of Done for every issue: `cargo check` green + at least one headless
-  `#[test]` + module-doc header (What / Controls / Feel / 0.18 gotchas).
+Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
+(`//! ...`) records *What it demonstrates / Controls / Feel notes / Bevy 0.18 gotchas*.
 
-Status: ✅ done · ⬜ todo (→ GitHub issue)
+## Samples
 
-## Seed (already built)
-| ID | Sample | Status |
-|----|--------|--------|
-| 01 | Third-person character controller (capsule + follow camera, Transform-based) | ✅ |
-| 02 | Physics grab & throw (rapier raycast + impulse) | ✅ |
-| 03 | Paint-on-mesh (runtime-editable `Image`, paint at hit UV) | ✅ |
+| # | Sample | Module | What it shows |
+|---|--------|--------|---------------|
+| 01 | Character Controller | [`s01_character_controller.rs`](../src/samples/s01_character_controller.rs) | Transform-based capsule: WASD move, follow camera, ground |
+| 02 | Physics Grab & Throw | [`s02_physics_grab_throw.rs`](../src/samples/s02_physics_grab_throw.rs) | Rapier raycast grab + throw by impulse |
+| 03 | Paint on Mesh | [`s03_paint_on_mesh.rs`](../src/samples/s03_paint_on_mesh.rs) | Runtime-editable `Image`, painted at the hit UV |
+| 04 | First-Person Controller | [`s04_first_person_controller.rs`](../src/samples/s04_first_person_controller.rs) | FPS move + pointer-lock look (yaw-relative) |
+| 05 | Spatial Audio — Proximity Falloff | [`s05_spatial_audio.rs`](../src/samples/s05_spatial_audio.rs) | Custom `Decodable` source + distance attenuation |
+| 06 | Hide & Seek — Prop Disguise | [`s06_hide_and_seek.rs`](../src/samples/s06_hide_and_seek.rs) | Swap `Mesh3d`/`MeshMaterial3d` to blend into props |
+| 07 | Ragdoll | [`s07_ragdoll_core.rs`](../src/samples/s07_ragdoll_core.rs) | Jointed capsules flop under gravity; click to punch, R to reset |
+| 08 | Red Light, Green Light | [`s08_red_light_green_light.rs`](../src/samples/s08_red_light_green_light.rs) | だるまさんがころんだ state machine + motion check |
+| 09 | Co-op Carry | [`s09_coop_carry.rs`](../src/samples/s09_coop_carry.rs) | Plank jointed to two carriers (one P-controlled follower) |
+| 10 | Emote / Pose Radial Wheel | [`s10_emote_wheel.rs`](../src/samples/s10_emote_wheel.rs) | Bevy-UI radial wheel → apply a procedural pose |
+| 11 | Top-Down Twin-Stick Movement | [`s11_top_down_twin_stick.rs`](../src/samples/s11_top_down_twin_stick.rs) | Decoupled move + cursor aim (free cursor, no pointer-lock) |
+| 12 | Tiny Planet | [`s12_tiny_planet.rs`](../src/samples/s12_tiny_planet.rs) | Spherical gravity + walk-on-sphere + props + damped follow camera |
 
-## Foundation (build first — shrinks every later sample)
-| Issue | Title | Depends | What it adds |
-|-------|-------|---------|--------------|
-| F1 ✅ | Shared input plugin (keyboard + pointer-lock mouse look) + refactor sample 01 | — | reusable `engine/input` module/plugin |
-| F2 | Shared HUD plugin (controls overlay + FPS via `FrameTimeDiagnosticsPlugin`) | — | reusable `hud` plugin |
-| F3 | Shared scene-primitives helper (ground plane, box grid, light preset) | — | reusable `prims` helpers |
+## Shared foundation (`src/engine/`)
 
-## Samples (one issue each)
-| Issue | Title | Depends | One-line |
-|-------|-------|---------|----------|
-| 04 | First-person controller | F1, F2 | FPS move + pointer-lock look (camera-relative) |
-| 05 | Spatial-audio proximity falloff | F2, F3 | Bevy `SpatialAudio` distance attenuation (proximity-voice stand-in) |
-| 06 | Hide-and-seek prop disguise (mesh swap) | F1, F3 | swap the player's `Mesh3d`/`MeshMaterial3d` to a nearby prop |
-| 08 | Red-light / green-light freeze detection | F1, F2 | だるまさんがころんだ state machine + motion check |
-| 09 | Co-op carry physics | F3 | pick up + carry a body via a rapier joint |
-| 10 | Emote / pose radial wheel | F2 | radial menu (Bevy UI) → apply a pose/emote |
-| 11 | Top-down twin-stick movement | F1, F3 | top-down move + aim |
+Added once in `main.rs`; samples read its resources:
 
-## Heavy samples (split into core + polish)
-| Issue | Title | Depends | One-line |
-|-------|-------|---------|----------|
-| 07a | Ragdoll core (jointed capsules) | F3 | rapier joints skeleton |
-| 07b | Ragdoll interactions + reset + feel notes | 07a | push / collapse / reset + README header |
-| 12a | Spherical gravity + walk-on-sphere | F3 | align "up" to surface normal, walk on a sphere |
-| 12b | Tiny-planet environment + camera + feel notes | 12a | planet scene + follow camera (Messenger-style) |
+- `input.rs` — `FoundationInputPlugin`: `MoveIntent` / `LookState` + pointer-lock.
+- `scene.rs` — `spawn_ground`, `spawn_light_preset`, `spawn_box_grid`.
+- `hud.rs` — controls overlay + FPS (`FrameTimeDiagnosticsPlugin`).
 
-**Total: 14 issues.** Build order is foundation → samples → heavy splits;
-`/dev-all` resolves it from the `depends on` links.
+## How this was built (AI-dev record)
+
+Each sample was one GitHub Issue → one PR, kept `cargo check`-green with a headless
+`#[test]`, driven by Claude Code's `/dev-all`. Foundation plugins landed first;
+heavy samples (ragdoll, tiny-planet) were split into `core` + `polish` issues.
+APIs are pinned to **Bevy 0.18** against the reference project `avvy-world`; the
+authoring contract and 0.18 gotchas live in [`../CLAUDE.md`](../CLAUDE.md).
+
+> **Code size note:** the Bevy samples total ~5,900 LOC (avg ~490/sample) versus
+> ~3,760 (Three) / comparable (Babylon) for the same mechanics — the cost of
+> explicit types, ECS plugin/system wiring, and Rapier setup. See
+> [`../../COMPARISON.md`](../../COMPARISON.md).

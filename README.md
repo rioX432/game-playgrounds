@@ -17,11 +17,13 @@ Each subdir is a self-contained project that implements the **same sample lineup
 | Dimension | The question |
 |-----------|--------------|
 | **Buildability / AI-dev fit** | Which engine is fastest and easiest to build with an AI agent (Claude)? |
-| **Feel (操作性)** | How does the *same* mechanic actually feel in each engine? |
+| **Feel** | How does the *same* mechanic actually feel in each engine? |
 | **Performance** | How heavy a scene can each one handle? |
 | **Deployment** | How do you ship it (e.g. to Steam)? |
 
 The goal is not to decide on paper — it's to **actually touch and compare**, so we can later pick which engine to build the real game in.
+
+➡️ **The findings are written up in [`COMPARISON.md`](./COMPARISON.md)** — the cross-engine verdict across all four axes, grounded in the per-sample feel notes and measured code size. All 12 mechanics are built in every engine.
 
 ---
 

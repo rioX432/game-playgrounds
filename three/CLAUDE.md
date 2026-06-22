@@ -2,7 +2,7 @@
 
 # three-playground
 
-A growing collection of self-contained **Three.js** samples that reproduce game mechanics and let us judge how each one *feels* (操作性 / control responsiveness). Built so Claude Code's `/dev-all` can autonomously add more samples from GitHub Issues — one issue per sample (or per sub-mechanic).
+A growing collection of self-contained **Three.js** samples that reproduce game mechanics and let us judge how each one *feels* (control responsiveness). Built so Claude Code's `/dev-all` can autonomously add more samples from GitHub Issues — one issue per sample (or per sub-mechanic).
 
 This is the sibling of `babylon-playground`: the **same sample lineup** is built in both engines for an apples-to-apples comparison.
 
@@ -31,7 +31,7 @@ src/
     02-physics-grab-throw/    { index.ts, README.md }
     03-paint-on-mesh/         { index.ts, README.md }
 docs/
-  SAMPLES.md         — backlog catalog (each row → one GitHub issue)
+  SAMPLES.md         — catalog of built samples (all 12, with links)
   ADDING-A-SAMPLE.md — step-by-step contract for adding a sample
 .claude/             — AI-dev harness (skills: dev, dev-all, review, pr, dig, decompose, ...)
 ```
