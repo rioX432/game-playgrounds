@@ -4,7 +4,7 @@
 
 A Babylon.js game-mechanics playground: a growing collection of self-contained
 samples that verify what Babylon.js can do and — just as importantly — how each
-mechanic actually *feels* (操作性). New samples are added autonomously from GitHub
+mechanic actually *feels*. New samples are added autonomously from GitHub
 Issues via Claude Code's `/dev-all` skill.
 
 ## Build & Run
@@ -48,13 +48,13 @@ babylon-playground/
 │       └── 03-paint-on-mesh/          — index.ts + README.md
 ├── docs/
 │   ├── ADDING-A-SAMPLE.md   — step-by-step authoring guide
-│   └── SAMPLES.md           — backlog catalog (each row = a future issue)
+│   └── SAMPLES.md           — catalog of built samples (all 12, with links)
 └── .claude/                 — AI-dev harness (skills, agents, rules, hooks)
 ```
 
 ## Core Values
 
-1. **Faithful mechanic reproduction with honest feel/操作性 notes.** Every sample
+1. **Faithful mechanic reproduction with honest feel notes.** Every sample
    reproduces a real game mechanic and documents how it *actually feels* — snappy
    vs. floaty, responsive vs. laggy, the tuning constants that matter. A sample
    that runs but lies about its feel is a failed sample.

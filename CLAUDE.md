@@ -1,6 +1,6 @@
 # game-playgrounds
 
-A monorepo of game-mechanics playgrounds in **three engines**, to verify what each can do, how each *feels* (操作性), and how each is to develop with AI agents. Each engine is a self-contained project in its own subdir.
+A monorepo of game-mechanics playgrounds in **three engines**, to verify what each can do, how each *feels*, and how each is to develop with AI agents. Each engine is a self-contained project in its own subdir.
 
 ## Subprojects
 
@@ -26,7 +26,7 @@ cd bevy && cargo run --features bevy/dynamic_linking   # run with fast increment
 
 ## Core Values (shared)
 
-1. **Faithful mechanic reproduction with honest feel notes** — every sample documents how it actually feels (操作性), including where it feels bad.
+1. **Faithful mechanic reproduction with honest feel notes** — every sample documents how it actually feels, including where it feels bad.
 2. **Idiomatic per engine, minimal dependencies.**
 3. **AI-Agent Developable** — code-first, no GUI editor, every sample self-contained and build-green.
 

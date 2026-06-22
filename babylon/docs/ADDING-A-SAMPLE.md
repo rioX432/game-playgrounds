@@ -110,7 +110,7 @@ Order in the array = order in the sidebar.
 
 - **What it demonstrates** — the mechanic and the Babylon features used.
 - **Controls** — a table of inputs → actions.
-- **Feel & difficulty notes** — honest 操作性: snappy/floaty, the tuning constants
+- **Feel & difficulty notes** — honest feel: snappy/floaty, the tuning constants
   that shape feel, and an implementation difficulty rating.
 - **Babylon-specific gotchas** — the non-obvious traps you hit (UV flips, async
   WASM, side-effect imports, pointer-lock gestures, etc.).

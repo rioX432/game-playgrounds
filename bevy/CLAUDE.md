@@ -1,7 +1,7 @@
 # bevy-playground
 
 A growing collection of self-contained **Bevy (Rust)** samples that reproduce
-game mechanics and let us judge how each one *feels* (操作性 / control
+game mechanics and let us judge how each one *feels* (control
 responsiveness). Sibling of `../three` and `../babylon` (TypeScript): the
 **same sample lineup**, built in Bevy for an apples-to-apples engine
 comparison. Built so Claude Code's `/dev-all` can autonomously add more
@@ -35,7 +35,7 @@ src/
     s02_physics_grab_throw.rs   — rapier raycast grab/throw (REPO-style)
     s03_paint_on_mesh.rs        — runtime-editable Image painted at hit UV
 docs/
-  SAMPLES.md                    — backlog catalog (each row = one GitHub issue)
+  SAMPLES.md                    — catalog of built samples (all 12, with links)
 .cargo/
   config_fast_builds.toml.example — OPTIONAL lld/mold linker config (copy to config.toml to enable)
 ```

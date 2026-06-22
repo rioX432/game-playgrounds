@@ -2,7 +2,7 @@
 
 A **Bevy (Rust)** game-mechanics playground — a growing collection of
 self-contained samples that verify what Bevy can do and, just as importantly,
-how each mechanic actually *feels* (操作性). Sibling of the TypeScript
+how each mechanic actually *feels*. Sibling of the TypeScript
 `../three` and `../babylon` playgrounds (same sample lineup, different engine).
 New samples are added autonomously from GitHub Issues via Claude Code's
 `/dev-all`.
@@ -31,9 +31,11 @@ cargo clippy                               # lints
 
 ## Docs
 
-- `docs/SAMPLES.md` — the backlog (each row = one GitHub issue = one PR)
+- `docs/SAMPLES.md` — the catalog of built samples (all 12 mechanics, with links)
+- `docs/ADDING-A-SAMPLE.md` — step-by-step contract for adding a sample
 - `CLAUDE.md` — project rules, Core Values, Won't Do, **Bevy 0.18 gotchas**,
   AI-agent fast-iteration rules, and the "Adding a Sample" contract.
+- [`../COMPARISON.md`](../COMPARISON.md) — cross-engine findings (Three vs Babylon vs Bevy)
 
 ## Stack
 
