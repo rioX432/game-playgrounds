@@ -11,6 +11,7 @@ import { sample09 } from "./09-coop-carry/index";
 import { sample10 } from "./10-emote-wheel/index";
 import { sample11 } from "./11-top-down-twin-stick/index";
 import { sample12a } from "./12a-spherical-gravity/index";
+import { sample12b } from "./12b-tiny-planet/index";
 
 /**
  * The ordered list of all playground samples. `/dev-all` appends a new entry
@@ -29,6 +30,7 @@ export const samples: Sample[] = [
   sample10,
   sample11,
   sample12a,
+  sample12b,
 ];
 
 export function findSample(id: string): Sample | undefined {
