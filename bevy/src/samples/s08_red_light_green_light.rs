@@ -89,18 +89,23 @@ const DOLL_POS: Vec3 = Vec3::new(0.0, 1.5, -4.0);
 const GREEN_SECS: f32 = 3.0;
 /// TURNING telegraph duration (seconds) — the doll eases from AWAY to TOWARD.
 /// Movement during TURNING is still legal (the doll isn't watching yet); this is
-/// the "stop now!" warning beat.
-const TURNING_SECS: f32 = 0.8;
+/// the "stop now!" warning beat. Aligned to the Three.js/Babylon.js peers.
+const TURNING_SECS: f32 = 0.45;
 /// RED phase duration (seconds) — you must be still or get CAUGHT.
 const RED_SECS: f32 = 2.5;
 /// Reaction grace (seconds) after RED begins during which motion is forgiven, so
-/// a key you were already holding doesn't instantly catch you.
-const GRACE_SECS: f32 = 0.35;
+/// a key you were already holding doesn't instantly catch you. Matches the peers.
+const GRACE_SECS: f32 = 0.18;
 
 /// Speed (world units / second) above which moving during RED (past the grace
-/// window) is CAUGHT. A small positive value tolerates float jitter so a
-/// perfectly still player is never falsely caught.
-const CATCH_SPEED_THRESHOLD: f32 = 0.05;
+/// window) is CAUGHT. Matches the peers; a small positive value tolerates float
+/// jitter so a perfectly still player is never falsely caught.
+const CATCH_SPEED_THRESHOLD: f32 = 0.25;
+
+/// Clear color the scene eases toward in RED (a dark red "the lighting goes red"
+/// tell, matching the peers tinting their background). Kept dark so it reads as a
+/// tint, not a blinding flash.
+const RED_CLEAR: Srgba = Srgba::new(0.32, 0.05, 0.06, 1.0);
 
 /// The doll's "looking away" yaw (back turned to the player — GREEN).
 const DOLL_YAW_AWAY: f32 = 0.0;
@@ -153,6 +158,12 @@ impl Default for RedLightState {
     }
 }
 
+/// Stores the app's clear color captured on entry so it can be restored on exit
+/// (the per-frame phase tint mutates the global `ClearColor`, which would
+/// otherwise bleed into the next sample — `DespawnOnExit` does not touch it).
+#[derive(Resource, Clone, Copy)]
+struct PrevClearColor(Color);
+
 /// Marks the follow camera.
 #[derive(Component)]
 struct FollowCamera;
@@ -174,6 +185,7 @@ pub struct RedLightGreenLightPlugin;
 impl Plugin for RedLightGreenLightPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(AppState::S08RedLightGreenLight), setup)
+            .add_systems(OnExit(AppState::S08RedLightGreenLight), restore_clear_color)
             .add_systems(
                 Update,
                 (
@@ -182,6 +194,7 @@ impl Plugin for RedLightGreenLightPlugin {
                     move_player,
                     detect_motion,
                     update_doll,
+                    tint_background,
                     update_hud,
                     follow_camera,
                 )
@@ -199,6 +212,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    clear: Res<ClearColor>,
 ) {
     let state = AppState::S08RedLightGreenLight;
     let scope = DespawnOnExit(state);
@@ -207,6 +221,9 @@ fn setup(
     // clear resources, so without this a re-entered sample would inherit the prior
     // run's phase/elapsed/outcome (stale phase bleed).
     commands.insert_resource(RedLightState::default());
+    // Capture the clear color so the phase tint can be restored on exit (it, too,
+    // is a resource untouched by DespawnOnExit).
+    commands.insert_resource(PrevClearColor(clear.0));
 
     // Shared scene: ground + key light. Each tags DespawnOnExit(state) internally.
     scene::spawn_ground(&mut commands, &mut meshes, &mut materials, state);
@@ -408,6 +425,25 @@ fn update_doll(state: Res<RedLightState>, mut doll_q: Query<&mut Transform, With
     transform.rotation = Quat::from_rotation_y(yaw);
 }
 
+/// Tints the scene's clear color toward [`RED_CLEAR`] by the phase "redness" —
+/// the peripheral "lighting goes red" tell the web peers get by lerping their
+/// background. Mutates the global `ClearColor`; [`restore_clear_color`] puts it
+/// back on exit so it never bleeds into the next sample.
+fn tint_background(
+    state: Res<RedLightState>,
+    prev: Res<PrevClearColor>,
+    mut clear: ResMut<ClearColor>,
+) {
+    let base = Srgba::from(prev.0);
+    let r = redness(state.phase, state.elapsed, TURNING_SECS);
+    clear.0 = lerp_srgba(base, RED_CLEAR, r).into();
+}
+
+/// Restores the captured clear color when leaving the sample.
+fn restore_clear_color(prev: Res<PrevClearColor>, mut clear: ResMut<ClearColor>) {
+    clear.0 = prev.0;
+}
+
 /// Writes the phase + outcome to the HUD line.
 fn update_hud(state: Res<RedLightState>, mut hud_q: Query<&mut Text, With<PhaseHudText>>) {
     let Ok(mut text) = hud_q.single_mut() else {
@@ -431,6 +467,26 @@ fn follow_camera(
 // ---------------------------------------------------------------------------
 // Pure logic (headless-testable, no ECS / window)
 // ---------------------------------------------------------------------------
+
+/// Phase "redness" in `[0,1]`: 0 in GREEN, ramps over TURNING by its elapsed
+/// fraction, and full 1 in RED — driving how far the scene tint eases to red.
+fn redness(phase: Phase, elapsed: f32, turning_secs: f32) -> f32 {
+    match phase {
+        Phase::Green => 0.0,
+        Phase::Turning => (elapsed / turning_secs).clamp(0.0, 1.0),
+        Phase::Red => 1.0,
+    }
+}
+
+/// Per-channel linear interpolation between two colors (alpha kept from `a`).
+fn lerp_srgba(a: Srgba, b: Srgba, t: f32) -> Srgba {
+    Srgba::new(
+        a.red + (b.red - a.red) * t,
+        a.green + (b.green - a.green) * t,
+        a.blue + (b.blue - a.blue) * t,
+        a.alpha,
+    )
+}
 
 /// Duration of a phase in seconds.
 fn phase_duration(phase: Phase) -> f32 {
@@ -638,5 +694,21 @@ mod tests {
         assert!((start - DOLL_YAW_AWAY).abs() < 1e-5, "turning starts at AWAY");
         assert!((end - DOLL_YAW_TOWARD).abs() < 1e-5, "turning ends at TOWARD");
         assert!(start < mid && mid < end, "turning eases monotonically away→toward");
+    }
+
+    /// The background "redness" is 0 in GREEN, ramps over TURNING, and is full in
+    /// RED — driving the scene tint the same way the doll yaw telegraphs the phase.
+    #[test]
+    fn redness_ramps_green_to_red() {
+        assert_eq!(redness(Phase::Green, 1.0, TURNING_SECS), 0.0, "GREEN is untinted");
+        assert_eq!(redness(Phase::Red, 0.0, TURNING_SECS), 1.0, "RED is fully tinted");
+
+        let start = redness(Phase::Turning, 0.0, TURNING_SECS);
+        let mid = redness(Phase::Turning, TURNING_SECS * 0.5, TURNING_SECS);
+        let end = redness(Phase::Turning, TURNING_SECS, TURNING_SECS);
+        assert!(start < mid && mid < end, "turning redness ramps monotonically");
+        assert!((end - 1.0).abs() < 1e-5, "turning ends fully red");
+        // Clamps past the phase end (defensive against a long frame).
+        assert_eq!(redness(Phase::Turning, TURNING_SECS * 2.0, TURNING_SECS), 1.0);
     }
 }
