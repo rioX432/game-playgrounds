@@ -14,7 +14,7 @@ Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
 
 | # | Sample | Module | What it shows |
 |---|--------|--------|---------------|
-| 01 | Character Controller | [`s01_character_controller.rs`](../src/samples/s01_character_controller.rs) | Transform-based capsule: WASD move, follow camera, ground |
+| 01 | Character Controller | [`s01_character_controller.rs`](../src/samples/s01_character_controller.rs) | Transform-based capsule: camera-relative WASD, mouse-look, Space jump + gravity, orbit follow camera |
 | 02 | Physics Grab & Throw | [`s02_physics_grab_throw.rs`](../src/samples/s02_physics_grab_throw.rs) | Rapier raycast grab + throw by impulse |
 | 03 | Paint on Mesh | [`s03_paint_on_mesh.rs`](../src/samples/s03_paint_on_mesh.rs) | Runtime-editable `Image`, painted at the hit UV |
 | 04 | First-Person Controller | [`s04_first_person_controller.rs`](../src/samples/s04_first_person_controller.rs) | FPS move + pointer-lock look (yaw-relative) |
