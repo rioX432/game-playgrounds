@@ -112,9 +112,13 @@ fn setup(
     ));
 
     // A small grid of dynamic cubes.
+    // Eight cubes in a 4x2 grid (matches the TS peers' BOX_COUNT = 8).
     let cube_mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-    for i in 0..5 {
-        let x = -4.0 + i as f32 * 2.0;
+    for i in 0..8 {
+        let col = (i % 4) as f32;
+        let row = (i / 4) as f32;
+        let x = col * 1.5 - 2.25;
+        let z = -6.0 + row * 1.5;
         commands.spawn((
             Throwable,
             Mesh3d(cube_mesh.clone()),
@@ -122,7 +126,7 @@ fn setup(
                 base_color: Color::srgb(0.9, 0.5, 0.2),
                 ..default()
             })),
-            Transform::from_xyz(x, 0.5, -6.0),
+            Transform::from_xyz(x, 0.5, z),
             RigidBody::Dynamic,
             Collider::cuboid(0.5, 0.5, 0.5),
             // `Velocity` lets the hold drive the body kinematically each frame;
