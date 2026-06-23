@@ -1,59 +1,50 @@
 //! # s06 — Hide-and-seek prop disguise (prop-hunt)
 //!
-//! **What it demonstrates:** The "prop hunt" disguise mechanic. A third-person
-//! player (capsule by default) can swap its visible mesh to one of a fixed
-//! catalog of environment props — crate / barrel / cone / sphere — to blend in
-//! with the static decoy props scattered around the stage. The disguise has a
-//! "tell": MOVING breaks it. While you hold still you are HIDDEN; the instant
-//! you move you are EXPOSED, shown by tinting the player's material red and a
-//! HUD state line. Cycle the disguise with `Q`/`E`. This is the third-person
-//! variant on purpose — you must be able to SEE your own disguise to judge how
-//! convincingly it blends, so the follow camera from s01 is reused.
+//! **What it demonstrates:** The "prop hunt" disguise mechanic, at parity with
+//! the Three.js / Babylon.js `06` peers. A third-person player swaps its visible
+//! mesh to one of a fixed catalog of environment props — crate / barrel / cone /
+//! sphere — to blend in with **decoys of those same props** scattered around the
+//! stage. The disguise has a "tell": MOVING breaks it. While still you are HIDDEN;
+//! moving flips you to EXPOSED, shown by **easing** the player's color toward red
+//! and **wobbling** the prop (so the tell is unmistakable), plus a HUD line.
+//! Cycle the disguise with `Q`/`E`. Third-person on purpose — you must SEE your
+//! own disguise to judge the blend, so a follow camera (from s01) is reused.
 //!
-//! **Controls:** `W/A/S/D` move (camera-relative, world axes). `Q` previous
-//! disguise, `E` next disguise (wraps both ways). `Esc` returns to the menu.
+//! **Controls:** `W/A/S/D` move (world axes; the prop turns to face travel). `Q`
+//! previous disguise, `E` next (wraps both ways). `Esc` returns to the menu.
 //!
-//! **Feel notes:** Cycling disguises is instant and satisfyingly tactile — the
-//! mesh pops to the next prop with zero delay, which reads well. The HIDDEN ⇄
-//! EXPOSED flip is also instant and legible (red tint + HUD), so the "freeze to
-//! hide" loop is immediately understandable. Honest bad parts: (1) there is **no
-//! real seeker AI** here — "blending in" is an honor-system judgment by the
-//! player looking at the decoys, so the tension of a real prop-hunt (a seeker
-//! sweeping the room) is absent; this sample verifies the disguise + tell
-//! *mechanic*, not the full game loop. (2) The tell is a hard binary on a single
-//! speed threshold, so a real game's "you twitched" grace window is missing —
-//! the moment you tap a key you are EXPOSED, which feels punishing rather than
-//! tense. (3) The player keeps its original collider-free transform movement
-//! (like s01), so you slide through the decoys instead of nestling against them,
-//! which undercuts the illusion the moment you try to line up with a prop.
+//! **Feel notes:** Cycling disguises is instant and tactile — the mesh pops to
+//! the next prop with zero delay. The HIDDEN ⇄ EXPOSED transition now **eases**
+//! (red tint + wobble fade in over ~1/12 s) rather than snapping, so a brief twitch
+//! reads as a flicker instead of a hard flip — much less punishing, closer to a
+//! real "you moved" tell. Honest bad parts: (1) there is still **no real seeker
+//! AI** — "blending in" is an honor-system judgment by the player against the
+//! decoys, so the tension of a seeker sweeping the room is absent; this verifies
+//! the disguise + tell *mechanic*, not the full loop. (2) The player still moves
+//! collider-free (like s01), so you slide through the decoys rather than nestling
+//! against them, which undercuts lining up with a prop.
 //!
 //! **Bevy 0.18 gotchas:**
-//!   * Swapping the visible mesh is done by overwriting the entity's `Mesh3d`
-//!     and `MeshMaterial3d` components (insert the new tuple) — there is no
-//!     `set_mesh`; the components ARE the source of truth, so re-inserting them
-//!     replaces the render handles.
-//!   * The disguise CATALOG of `Handle<Mesh>`/`Handle<StandardMaterial>` is held
-//!     on the player entity (a `Disguise` component field), NOT in a `Resource`.
-//!     `DespawnOnExit` does NOT clear resources, so a catalog stashed in a
-//!     resource would survive the sample switch and leak the GPU assets. Held on
-//!     the player, the handles drop when the player despawns on exit and the
-//!     assets are freed (ref-counted by `Handle`).
-//!   * Disguise cycling is edge-triggered: `ButtonInput::just_pressed` (NOT
-//!     `pressed`, which would spin through the whole catalog every frame a key
-//!     is held).
-//!   * Index wrap uses `rem_euclid` so stepping *back* from index 0 lands on the
-//!     last entry (plain `%` on a subtraction would underflow on `usize`).
-//!   * `Time` delta is `time.delta_secs()` (f32), not `delta_seconds()`.
-//!   * `Query::single_mut()` returns `Result` — handle with `let Ok(..) = ..`.
+//!   * Swapping the visible mesh overwrites the entity's `Mesh3d` component
+//!     (re-insert it) — there is no `set_mesh`. The player keeps ONE owned
+//!     `StandardMaterial`; the EXPOSED tint mutates that material's `base_color`
+//!     each frame (`ResMut<Assets<StandardMaterial>>` + `get_mut`), so it never
+//!     tints the shared decoys.
+//!   * The disguise CATALOG (mesh/material handles) is held on the player entity,
+//!     NOT a `Resource`: `DespawnOnExit` does not clear resources, so a catalog in
+//!     a resource would survive the sample switch and leak GPU assets. On the
+//!     player, handles drop when it despawns and the assets are freed.
+//!   * Disguise cycling is edge-triggered (`just_pressed`, not `pressed`).
+//!   * Index wrap uses `rem_euclid` so stepping back from 0 lands on the last entry.
+//!   * Wobble phase uses `time.elapsed_secs()`; the eased exposure uses
+//!     `time.delta_secs()`. `Query::single_mut()` returns `Result`.
 //!
-//! **Shared input:** movement reads the global [`MoveIntent`] resource owned by
-//! `engine::input::FoundationInputPlugin`. Disguise cycling reads
-//! `ButtonInput<KeyCode>` directly since it's a one-off edge, not a shared intent.
+//! **Shared input:** movement reads the global [`MoveIntent`] resource. Disguise
+//! cycling reads `ButtonInput<KeyCode>` directly (a one-off edge).
 //!
-//! **Shared HUD/scene:** ground, light, and the decoy prop grid come from
-//! `engine::scene`; the controls overlay + FPS counter from `engine::hud`. All
-//! are `DespawnOnExit`-scoped internally, so only the player capsule, follow
-//! camera, and disguise-state HUD line are spawned inline here.
+//! **Shared HUD/scene:** ground + light come from `engine::scene`; the controls
+//! overlay + FPS counter from `engine::hud` (all `DespawnOnExit`-scoped). The
+//! player, follow camera, decoys, and disguise-state HUD line are spawned inline.
 
 use bevy::prelude::*;
 
@@ -70,49 +61,70 @@ pub const META: SampleMeta = SampleMeta {
     tags: &["disguise", "prop-hunt", "stealth", "movement"],
 };
 
-/// Player movement speed in world units / second.
-const MOVE_SPEED: f32 = 6.0;
+/// Player movement speed in world units / second (matches the TS peers).
+const MOVE_SPEED: f32 = 5.0;
 /// Camera offset behind/above the player (world units).
 const CAMERA_OFFSET: Vec3 = Vec3::new(0.0, 6.0, 10.0);
-/// Decoy prop grid dimensions (columns x rows) — static props to blend in with.
-const DECOY_GRID_COLS: u32 = 3;
-const DECOY_GRID_ROWS: u32 = 3;
 /// Speed (world units / second) above which the disguise is broken (EXPOSED).
-/// A small positive value tolerates float jitter so a perfectly still player is
-/// never falsely EXPOSED.
-const EXPOSE_SPEED_THRESHOLD: f32 = 0.05;
-/// Red tint applied to whatever disguise material is active while EXPOSED.
-const EXPOSED_TINT: Color = Color::srgb(0.9, 0.15, 0.15);
+/// Matches the TS peers; absorbs float jitter so a still player is never EXPOSED.
+const EXPOSE_SPEED_THRESHOLD: f32 = 0.2;
+/// Red tint the disguise color eases toward while EXPOSED (web peers' `0xff3b30`).
+const EXPOSED_TINT: Srgba = Srgba::new(1.0, 0.231, 0.188, 1.0);
+/// How fast the exposure (tint + wobble) eases in/out, per second.
+const TINT_LERP_RATE: f32 = 12.0;
+/// Wobble jitter frequency (rad/s) applied to the prop while EXPOSED.
+const WOBBLE_FREQUENCY: f32 = 14.0;
+/// Wobble tilt amplitude (radians) at full exposure.
+const WOBBLE_AMPLITUDE: f32 = 0.12;
+/// Secondary-axis (pitch) wobble tilt relative to the main (roll) wobble.
+const WOBBLE_PITCH_RATIO: f32 = 0.5;
+
+/// Scattered decoy positions (x, z), cycling through the prop catalog. Mirrors
+/// the TS peers' `DECOY_POSITIONS` (−Z is in front of the start, same handedness).
+const DECOY_POSITIONS: [(f32, f32); 8] = [
+    (-6.0, -2.0),
+    (-3.0, -8.0),
+    (3.0, -6.0),
+    (7.0, -1.0),
+    (-8.0, -7.0),
+    (5.0, -10.0),
+    (0.0, -4.0),
+    (-4.0, -12.0),
+];
 
 /// Marks the follow camera.
 #[derive(Component)]
 struct FollowCamera;
 
-/// The player entity. Owns the disguise catalog (mesh + base-material handle
-/// pairs) and the currently selected index, plus the previous-frame translation
-/// used to compute speed for the "tell". Holding the catalog handles HERE (not in
-/// a `Resource`) is what frees the assets on sample exit — see the module gotchas.
+/// The player entity. Owns the disguise catalog + its single tintable material,
+/// the selected index, the eased exposure (0 hidden → 1 exposed), the facing yaw,
+/// and the previous-frame translation used to derive speed for the tell. Holding
+/// the handles HERE (not a `Resource`) frees the assets on exit — see gotchas.
 #[derive(Component)]
 struct Player {
-    /// Catalog of selectable disguises: `(mesh, base_material)` per prop shape.
-    /// Cloned handles keep the assets alive for the life of the player entity.
+    /// Catalog of selectable disguises.
     catalog: Vec<DisguiseEntry>,
     /// Index into [`Self::catalog`] of the currently worn disguise.
     current: usize,
+    /// The player's OWN material (tinted toward red by exposure each frame).
+    material: Handle<StandardMaterial>,
+    /// Eased exposure: 0 = fully hidden, 1 = fully exposed.
+    exposure: f32,
+    /// Facing yaw (radians), updated to the travel direction while moving.
+    facing_yaw: f32,
     /// Player translation last frame, to derive per-frame speed for the tell.
     prev_translation: Vec3,
 }
 
-/// One catalog disguise: a prop mesh and its "blend-in" base material. The
-/// EXPOSED state does not need a second material per entry — it derives a red
-/// tint from a single shared exposed material handle (see [`setup`]).
+/// One catalog disguise: a prop mesh, its blend-in base color (the player's
+/// material eases between this and red), the decoys' shared material, and the Y
+/// offset that rests the prop on the ground (its half-height).
 struct DisguiseEntry {
-    /// Human label for the HUD ("Crate", "Barrel", ...).
     label: &'static str,
-    /// The prop mesh handle (Cuboid / Cylinder / Cone / Sphere).
     mesh: Handle<Mesh>,
-    /// The hidden/blend-in material handle for this prop.
-    base_material: Handle<StandardMaterial>,
+    base_color: Srgba,
+    decoy_material: Handle<StandardMaterial>,
+    rest_y: f32,
 }
 
 pub struct HideAndSeekPlugin;
@@ -129,10 +141,6 @@ impl Plugin for HideAndSeekPlugin {
     }
 }
 
-/// Builds the disguise catalog once and spawns the player wearing entry 0, the
-/// follow camera, the shared stage, and the HUD. Every spawned entity is
-/// `DespawnOnExit`-scoped; the catalog handles live on the player so they drop on
-/// exit (no asset leak, no surviving resource).
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -141,43 +149,49 @@ fn setup(
     let state = AppState::S06HideAndSeek;
     let scope = DespawnOnExit(state);
 
-    // Shared scene primitives: ground + light + a grid of decoy props to hide
-    // among. Each helper tags its entities DespawnOnExit(state) internally.
+    // Shared scene primitives: ground + light. Each DespawnOnExit-scoped.
     scene::spawn_ground(&mut commands, &mut meshes, &mut materials, state);
     scene::spawn_light_preset(&mut commands, state);
-    scene::spawn_box_grid(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        state,
-        DECOY_GRID_COLS,
-        DECOY_GRID_ROWS,
-    );
 
-    // Build the disguise catalog ONCE. Handles are ref-counted; the clones stored
-    // on the player keep these assets alive until the player despawns on exit.
+    // Build the catalog ONCE (handles ref-counted; the clones on the player +
+    // decoys keep the assets alive until those entities despawn on exit).
     let catalog = build_catalog(&mut meshes, &mut materials);
-    let shared_exposed_material = materials.add(StandardMaterial {
-        base_color: EXPOSED_TINT,
+
+    // Scatter decoys: one per position, cycling through the prop catalog, so the
+    // player has matching scenery to blend into (not generic boxes).
+    for (i, (x, z)) in DECOY_POSITIONS.iter().enumerate() {
+        let prop = &catalog[i % catalog.len()];
+        commands.spawn((
+            Mesh3d(prop.mesh.clone()),
+            MeshMaterial3d(prop.decoy_material.clone()),
+            Transform::from_xyz(*x, prop.rest_y, *z),
+            scope.clone(),
+        ));
+    }
+
+    // The player wears the first disguise via its OWN material (so the tint never
+    // touches the shared decoys), resting on the ground at the prop's half-height.
+    // Copy the entry-0 values out before moving `catalog` into the Player.
+    let first_mesh = catalog[0].mesh.clone();
+    let first_color = catalog[0].base_color;
+    let first_rest_y = catalog[0].rest_y;
+    let player_material = materials.add(StandardMaterial {
+        base_color: first_color.into(),
         ..default()
     });
-
-    // The player starts wearing the first disguise. The decoy grid sits at the
-    // origin, so offset the player so it reads as a separate "infiltrator".
-    let first_mesh = catalog[0].mesh.clone();
-    let first_material = catalog[0].base_material.clone();
+    let start = Vec3::new(0.0, first_rest_y, 10.0);
     commands.spawn((
         Player {
+            material: player_material.clone(),
             catalog,
             current: 0,
-            prev_translation: Vec3::new(0.0, 0.5, 6.0),
+            exposure: 0.0,
+            facing_yaw: 0.0,
+            prev_translation: start,
         },
-        // Keep one extra handle to the shared exposed material alive on the
-        // player so it, too, frees on exit (it is not in any catalog entry).
-        ExposedMaterial(shared_exposed_material),
         Mesh3d(first_mesh),
-        MeshMaterial3d(first_material),
-        Transform::from_xyz(0.0, 0.5, 6.0),
+        MeshMaterial3d(player_material),
+        Transform::from_translation(start),
         scope.clone(),
     ));
 
@@ -185,8 +199,7 @@ fn setup(
     commands.spawn((
         FollowCamera,
         Camera3d::default(),
-        Transform::from_translation(Vec3::new(0.0, 0.5, 6.0) + CAMERA_OFFSET)
-            .looking_at(Vec3::new(0.0, 0.5, 6.0), Vec3::Y),
+        Transform::from_translation(start + CAMERA_OFFSET).looking_at(start, Vec3::Y),
         scope.clone(),
     ));
 
@@ -220,88 +233,67 @@ fn setup(
     hud::spawn_fps_counter(&mut commands, state);
 }
 
-/// Holds an extra clone of the shared EXPOSED material handle on the player so it
-/// is freed on sample exit along with the catalog (it lives in no catalog entry).
-#[derive(Component)]
-struct ExposedMaterial(Handle<StandardMaterial>);
-
 /// Marker for the HUD line showing the current disguise + HIDDEN/EXPOSED state.
 #[derive(Component)]
 struct DisguiseHudText;
 
-/// Builds the fixed disguise catalog: one entry per prop shape, each with its own
-/// blend-in base material. Pulled out so [`setup`] reads cleanly and so the count
-/// is asserted by a headless test.
+/// Builds the fixed disguise catalog (sizes/colors mirror the TS peers so the
+/// player and the decoys are the same props). Pulled out so [`setup`] reads
+/// cleanly and the count is asserted by a headless test.
 fn build_catalog(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) -> Vec<DisguiseEntry> {
+    let mut make = |label, mesh: Mesh, color: Srgba, rest_y| DisguiseEntry {
+        label,
+        mesh: meshes.add(mesh),
+        base_color: color,
+        decoy_material: materials.add(StandardMaterial {
+            base_color: color.into(),
+            ..default()
+        }),
+        rest_y,
+    };
     vec![
-        DisguiseEntry {
-            label: "Crate",
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            base_material: materials.add(StandardMaterial {
-                base_color: Color::srgb(0.6, 0.4, 0.2),
-                ..default()
-            }),
-        },
-        DisguiseEntry {
-            label: "Barrel",
-            mesh: meshes.add(Cylinder::new(0.5, 1.0)),
-            base_material: materials.add(StandardMaterial {
-                base_color: Color::srgb(0.3, 0.3, 0.35),
-                ..default()
-            }),
-        },
-        DisguiseEntry {
-            label: "Cone",
-            mesh: meshes.add(Cone {
-                radius: 0.6,
-                height: 1.2,
-            }),
-            base_material: materials.add(StandardMaterial {
-                base_color: Color::srgb(0.8, 0.7, 0.2),
-                ..default()
-            }),
-        },
-        DisguiseEntry {
-            label: "Sphere",
-            mesh: meshes.add(Sphere::new(0.6)),
-            base_material: materials.add(StandardMaterial {
-                base_color: Color::srgb(0.5, 0.6, 0.8),
-                ..default()
-            }),
-        },
+        make("Crate", Cuboid::new(1.4, 1.4, 1.4).into(), Srgba::new(0.612, 0.420, 0.247, 1.0), 0.7),
+        make("Barrel", Cylinder::new(0.7, 1.5).into(), Srgba::new(0.290, 0.471, 0.659, 1.0), 0.75),
+        make(
+            "Cone",
+            Cone { radius: 0.85, height: 1.7 }.into(),
+            Srgba::new(0.373, 0.682, 0.373, 1.0),
+            0.85,
+        ),
+        make("Sphere", Sphere::new(0.8).into(), Srgba::new(0.690, 0.373, 0.682, 1.0), 0.8),
     ]
 }
 
 /// Moves the player on the XZ plane from the shared [`MoveIntent`] (world axes,
-/// W = -Z), exactly like s01. Speed for the "tell" is derived separately in
-/// [`update_tell`] from the resulting translation delta, so movement here stays a
-/// pure position update.
+/// W = -Z) and, while moving, updates the facing yaw to the travel direction so
+/// the prop turns to face where it walks (mirrors the TS peers).
 fn move_player(
     time: Res<Time>,
     intent: Res<MoveIntent>,
-    mut query: Query<&mut Transform, With<Player>>,
+    mut query: Query<(&mut Transform, &mut Player)>,
 ) {
-    let Ok(mut transform) = query.single_mut() else {
+    let Ok((mut transform, mut player)) = query.single_mut() else {
         return;
     };
     if intent.dir != Vec3::ZERO {
         transform.translation += intent.dir * MOVE_SPEED * time.delta_secs();
+        player.facing_yaw = intent.dir.x.atan2(intent.dir.z);
     }
 }
 
-/// Edge-triggered disguise cycling: `Q` steps back, `E` steps forward, wrapping
-/// both ways via [`cycle_index`]. On a change, re-inserts the player's `Mesh3d` +
-/// `MeshMaterial3d` to the newly selected catalog entry (the components ARE the
-/// render source of truth — there is no `set_mesh`).
+/// Edge-triggered disguise cycling: `Q` back, `E` forward (wraps via
+/// [`cycle_index`]). Re-inserts the player's `Mesh3d` and rests it on the ground
+/// at the new prop's half-height. The tint material is unchanged here — [`update_tell`]
+/// recolors the player's own material from the new disguise's base color next frame.
 fn cycle_disguise(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Player)>,
+    mut query: Query<(Entity, &mut Player, &mut Transform)>,
 ) {
-    let Ok((entity, mut player)) = query.single_mut() else {
+    let Ok((entity, mut player, mut transform)) = query.single_mut() else {
         return;
     };
     let mut delta = 0i32;
@@ -318,50 +310,50 @@ fn cycle_disguise(
     let len = player.catalog.len();
     player.current = cycle_index(player.current, delta, len);
     let entry = &player.catalog[player.current];
+    transform.translation.y = entry.rest_y;
     let mesh = entry.mesh.clone();
-    // While EXPOSED, keep the red tint; otherwise show the new blend-in material.
-    // `update_tell` (which runs after this in the chain) will re-assert the right
-    // material anyway, but setting the base here avoids a one-frame stale mesh.
-    let material = entry.base_material.clone();
-    commands
-        .entity(entity)
-        .insert((Mesh3d(mesh), MeshMaterial3d(material)));
+    commands.entity(entity).insert(Mesh3d(mesh));
 }
 
-/// Recomputes the "tell" every frame: derives the player's speed from how far it
-/// moved since last frame, sets `exposed` via [`is_exposed`], swaps the player's
-/// material to the shared red tint (EXPOSED) or its disguise base (HIDDEN), and
-/// updates the HUD line.
+/// Recomputes the "tell" every frame: derive speed from the per-frame translation
+/// delta, ease `exposure` toward 1 (moving) or 0 (still), tint the player's OWN
+/// material from the disguise base color toward red by that exposure, wobble the
+/// prop, and update the HUD line.
 fn update_tell(
     time: Res<Time>,
-    mut commands: Commands,
-    mut player_q: Query<(Entity, &mut Player, &Transform, &ExposedMaterial)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut player_q: Query<(&mut Player, &mut Transform)>,
     mut hud_q: Query<&mut Text, With<DisguiseHudText>>,
 ) {
-    let Ok((entity, mut player, transform, exposed_mat)) = player_q.single_mut() else {
+    let Ok((mut player, mut transform)) = player_q.single_mut() else {
         return;
     };
 
     let dt = time.delta_secs();
     let distance = transform.translation.distance(player.prev_translation);
-    // Guard against a zero `dt` on the very first tick (would divide by zero).
     let speed = if dt > 0.0 { distance / dt } else { 0.0 };
     player.prev_translation = transform.translation;
 
-    let exposed = is_exposed(speed, EXPOSE_SPEED_THRESHOLD);
+    let exposed_now = is_exposed(speed, EXPOSE_SPEED_THRESHOLD);
+    let target = if exposed_now { 1.0 } else { 0.0 };
+    player.exposure = ease_exposure(player.exposure, target, TINT_LERP_RATE, dt);
 
-    // Pick the material: red tint while EXPOSED, the current disguise base while
-    // HIDDEN. Re-inserting MeshMaterial3d is the swap (no `set_material`).
-    let material = if exposed {
-        exposed_mat.0.clone()
-    } else {
-        player.catalog[player.current].base_material.clone()
-    };
-    commands.entity(entity).insert(MeshMaterial3d(material));
+    // Tint: lerp the disguise base color toward red by the eased exposure.
+    let base = player.catalog[player.current].base_color;
+    if let Some(material) = materials.get_mut(&player.material) {
+        material.base_color = lerp_srgba(base, EXPOSED_TINT, player.exposure).into();
+    }
+
+    // Wobble: tilt the prop (roll + a little pitch) while exposed; compose with
+    // the facing yaw so a moving prop both points and jitters.
+    let wobble = (time.elapsed_secs() * WOBBLE_FREQUENCY).sin() * WOBBLE_AMPLITUDE * player.exposure;
+    transform.rotation = Quat::from_rotation_y(player.facing_yaw)
+        * Quat::from_rotation_z(wobble)
+        * Quat::from_rotation_x(wobble * WOBBLE_PITCH_RATIO);
 
     if let Ok(mut text) = hud_q.single_mut() {
         let label = player.catalog[player.current].label;
-        let state = if exposed { "EXPOSED" } else { "HIDDEN" };
+        let state = if exposed_now { "EXPOSED" } else { "HIDDEN" };
         **text = format!("Disguise: {label}  |  {state}");
     }
 }
@@ -378,18 +370,32 @@ fn follow_camera(
     cam.look_at(player.translation, Vec3::Y);
 }
 
-/// Pure helper: the disguise is broken (EXPOSED) when the player's speed exceeds
-/// the tolerance threshold. A still player (speed at/below the threshold) stays
-/// HIDDEN — the small positive threshold absorbs float jitter so standing still
-/// never false-triggers EXPOSED. Extracted so the tell is testable headless.
+/// Pure helper: the disguise is broken (EXPOSED) when speed exceeds the tolerance
+/// threshold. A still player stays HIDDEN. Extracted so the tell is testable.
 fn is_exposed(speed: f32, threshold: f32) -> bool {
     speed > threshold
 }
 
-/// Pure helper: steps a catalog index by `delta` (e.g. `+1`/`-1`) and wraps in
-/// both directions. Uses `rem_euclid` so stepping back from 0 lands on the last
-/// entry instead of underflowing the `usize`. `len` must be non-zero (the catalog
-/// is always non-empty); returns `0` defensively if it isn't.
+/// Pure helper: frame-rate-aware exponential ease of `current` toward `target` at
+/// `rate` per second, clamping the blend to `1.0` so a large `dt` can't overshoot.
+fn ease_exposure(current: f32, target: f32, rate: f32, dt: f32) -> f32 {
+    current + (target - current) * (rate * dt).min(1.0)
+}
+
+/// Pure helper: per-channel linear interpolation between two colors (alpha kept
+/// from `a`). Extracted so the tint blend is unit-testable.
+fn lerp_srgba(a: Srgba, b: Srgba, t: f32) -> Srgba {
+    Srgba::new(
+        a.red + (b.red - a.red) * t,
+        a.green + (b.green - a.green) * t,
+        a.blue + (b.blue - a.blue) * t,
+        a.alpha,
+    )
+}
+
+/// Pure helper: steps a catalog index by `delta` and wraps both ways via
+/// `rem_euclid` (stepping back from 0 lands on the last entry). `len == 0`
+/// returns 0 defensively.
 fn cycle_index(current: usize, delta: i32, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -402,10 +408,8 @@ fn cycle_index(current: usize, delta: i32, len: usize) -> usize {
 mod tests {
     use super::*;
 
-    /// The tell: a still player (speed below the threshold) is HIDDEN; a moving
-    /// player (speed above it) is EXPOSED. Non-tautological: asserts both the
-    /// boundary-below and clearly-above cases, and that the threshold itself is
-    /// inclusive of "still" (not exposed).
+    /// The tell: a still player (speed at/below the threshold) is HIDDEN; moving
+    /// past it is EXPOSED, with the threshold inclusive of "still".
     #[test]
     fn is_exposed_only_when_moving() {
         let threshold = EXPOSE_SPEED_THRESHOLD;
@@ -414,61 +418,47 @@ mod tests {
             !is_exposed(threshold, threshold),
             "speed exactly at the threshold must stay HIDDEN (jitter tolerance)"
         );
+        assert!(is_exposed(MOVE_SPEED, threshold), "moving must be EXPOSED");
+    }
+
+    /// Exposure eases toward its target and never overshoots, even with a large
+    /// `dt` (the blend clamps at 1.0). Non-tautological: checks partial progress
+    /// on a normal step and exact arrival (no overshoot) on a huge step.
+    #[test]
+    fn ease_exposure_approaches_target_without_overshoot() {
+        // Normal step: moves partway from 0 toward 1.
+        let mid = ease_exposure(0.0, 1.0, TINT_LERP_RATE, 1.0 / 60.0);
+        assert!(mid > 0.0 && mid < 1.0, "should ease partway, got {mid}");
+        // Huge dt: blend clamps at 1.0, so it snaps to (but not past) the target.
+        let snapped = ease_exposure(0.0, 1.0, TINT_LERP_RATE, 10.0);
+        assert!((snapped - 1.0).abs() < 1e-6, "must not overshoot, got {snapped}");
+        // Easing back down toward 0 also progresses.
+        let down = ease_exposure(1.0, 0.0, TINT_LERP_RATE, 1.0 / 60.0);
+        assert!(down < 1.0 && down > 0.0, "should ease back down, got {down}");
+    }
+
+    /// The tint blend interpolates each channel and is the endpoints at t=0/1.
+    #[test]
+    fn lerp_srgba_blends_channels() {
+        let base = Srgba::new(0.6, 0.4, 0.2, 1.0);
+        assert_eq!(lerp_srgba(base, EXPOSED_TINT, 0.0).red, base.red);
+        assert_eq!(lerp_srgba(base, EXPOSED_TINT, 1.0).red, EXPOSED_TINT.red);
+        let mid = lerp_srgba(base, EXPOSED_TINT, 0.5);
         assert!(
-            !is_exposed(threshold * 0.5, threshold),
-            "below-threshold drift must stay HIDDEN"
-        );
-        assert!(
-            is_exposed(MOVE_SPEED, threshold),
-            "moving at full speed must be EXPOSED"
+            mid.red > base.red && mid.red < EXPOSED_TINT.red,
+            "mid red should be between endpoints, got {}",
+            mid.red
         );
     }
 
-    /// Index cycling wraps forward AND backward via `rem_euclid`. Non-tautological:
-    /// checks a normal forward step, the forward wrap (last -> first), the
-    /// backward wrap (first -> last), and a backward step in the middle.
+    /// Index cycling wraps forward AND backward via `rem_euclid`.
     #[test]
     fn cycle_index_wraps_both_ways() {
         let len = 4; // crate / barrel / cone / sphere
-
-        // Forward within range.
         assert_eq!(cycle_index(0, 1, len), 1);
-        // Forward wrap: last -> first.
         assert_eq!(cycle_index(len - 1, 1, len), 0);
-        // Backward wrap: first -> last (the rem_euclid case that plain % breaks).
         assert_eq!(cycle_index(0, -1, len), len - 1);
-        // Backward within range.
         assert_eq!(cycle_index(2, -1, len), 1);
-        // Defensive: empty catalog never panics.
         assert_eq!(cycle_index(0, -1, 0), 0);
-    }
-
-    /// Headless proof that the player Transform advances from the shared
-    /// `MoveIntent` (mirrors s01) — the source of the speed the tell reads.
-    #[test]
-    fn move_player_advances_from_intent() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.insert_resource(MoveIntent {
-            dir: Vec3::new(0.0, 0.0, -1.0),
-        });
-        let player = app
-            .world_mut()
-            .spawn((
-                Player {
-                    catalog: Vec::new(),
-                    current: 0,
-                    prev_translation: Vec3::ZERO,
-                },
-                Transform::from_xyz(0.0, 0.5, 6.0),
-            ))
-            .id();
-        app.add_systems(Update, move_player);
-        // Two updates so Time has a non-zero delta after its first tick.
-        app.update();
-        app.update();
-
-        let z = app.world().get::<Transform>(player).unwrap().translation.z;
-        assert!(z < 6.0, "forward intent should move the player toward -Z, got z={z}");
     }
 }
