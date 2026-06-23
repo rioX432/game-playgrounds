@@ -16,16 +16,17 @@
 //! positional nodes.
 //!
 //! **Controls:** Click to lock the mouse. `W/A/S/D` move (yaw-relative).
-//! `Mouse` looks. `Space` jumps. `Esc` returns to the menu (which releases the
-//! cursor and despawns every emitter — stopping its sink, so audio stops with
-//! no manual teardown). The HUD shows the nearest beacon's distance + gain.
+//! `Mouse` looks. `Esc` returns to the menu (which releases the cursor and
+//! despawns every emitter — stopping its sink, so audio stops with no manual
+//! teardown). The HUD shows the nearest beacon's distance + gain.
 //!
 //! **Feel notes:** Walking toward a beacon and hearing it swell, then fade as
 //! you pass it, reads convincingly as a proximity voice — the distinct pitches
 //! make it obvious *which* emitter is near, and panning makes it obvious *which
-//! side* it's on. The first-person movement is reused verbatim from s04, so it
-//! feels the same arcade-stiff way (instant accel/decel, no head-bob, you clip
-//! through the boxes). Honest bad parts:
+//! side* it's on. Movement is a **flat walk** (yaw-relative WASD, fixed eye
+//! height, no jump) to match the web peers — the demo under test is the audio,
+//! not the locomotion; it's arcade-stiff (instant accel/decel, no head-bob) and
+//! you clip through the boxes. Honest bad parts:
 //! (1) the engine pans L/R but does **not** occlude — a beacon behind a wall is
 //! as loud as one in the open (no muffling); a real proximity-voice game filters
 //! through geometry. (2) The raw sine is a harsh, buzzy test tone, not
@@ -93,16 +94,12 @@ pub const META: SampleMeta = SampleMeta {
     tags: &["audio", "spatial", "proximity", "first-person"],
 };
 
-// --- First-person movement (reused from s04) ---------------------------------
+// --- First-person movement (flat walk, like the web peers — no jump) ----------
 
 /// Horizontal movement speed (world units / second).
 const MOVE_SPEED: f32 = 6.0;
-/// Eye height above the floor (world units) — the camera's resting Y.
+/// Eye height above the floor (world units) — the camera's fixed Y (flat walk).
 const EYE_HEIGHT: f32 = 1.7;
-/// Gravity acceleration (world units / second^2), pulling the eye down.
-const GRAVITY: f32 = -20.0;
-/// Upward velocity imparted by a jump (world units / second).
-const JUMP_SPEED: f32 = 7.0;
 
 // --- Proximity attenuation curve ---------------------------------------------
 
@@ -217,13 +214,10 @@ impl Decodable for BeaconTone {
 
 // --- Sample components & layout ----------------------------------------------
 
-/// The first-person eye (camera). Holds kinematic vertical velocity; horizontal
-/// motion is stateless (driven from [`MoveIntent`]). Mirrors s04's `Eye`.
-#[derive(Component, Default)]
-struct Eye {
-    /// Current vertical velocity (world units / second). `0` while grounded.
-    vertical_velocity: f32,
-}
+/// The first-person eye (camera). Walks flat at a fixed height — no jump/gravity,
+/// matching the web peers (the demo under test is proximity audio, not movement).
+#[derive(Component)]
+struct Eye;
 
 /// A proximity beacon: a visible marker whose `AudioSink` volume is driven each
 /// frame from the player distance via [`proximity_gain`].
@@ -269,7 +263,7 @@ impl Plugin for SpatialAudioPlugin {
             .add_systems(OnEnter(AppState::S05SpatialAudio), setup)
             .add_systems(
                 Update,
-                (aim_eye, move_eye, apply_gravity_and_jump, drive_proximity_volume)
+                (aim_eye, move_eye, drive_proximity_volume)
                     .chain()
                     .run_if(in_state(AppState::S05SpatialAudio)),
             );
@@ -321,7 +315,7 @@ fn setup(
     // The eye camera (sample-specific). Starts at eye height, looking down -Z.
     // The `SpatialListener` makes it the ears for the engine's panning.
     commands.spawn((
-        Eye::default(),
+        Eye,
         Camera3d::default(),
         Transform::from_xyz(0.0, EYE_HEIGHT, 8.0),
         SpatialListener::new(EAR_GAP),
@@ -335,7 +329,6 @@ fn setup(
             "Click — lock mouse",
             "WASD — move",
             "Mouse — look",
-            "Space — jump",
             "Walk near a beacon — it gets louder",
             "Esc — back to menu",
         ],
@@ -365,43 +358,8 @@ fn move_eye(
         return;
     }
     let world_dir = Quat::from_rotation_y(look.yaw) * intent.dir;
+    // Flat walk: horizontal only, Y stays at the fixed eye height (no jump).
     transform.translation += world_dir * MOVE_SPEED * time.delta_secs();
-}
-
-/// Kinematic gravity + jump on the eye's Y (reused from s04).
-fn apply_gravity_and_jump(
-    time: Res<Time>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut Eye)>,
-) {
-    let Ok((mut transform, mut eye)) = query.single_mut() else {
-        return;
-    };
-    let jump = keyboard.just_pressed(KeyCode::Space);
-    let (y, v) = step_vertical(
-        transform.translation.y,
-        eye.vertical_velocity,
-        jump,
-        time.delta_secs(),
-    );
-    transform.translation.y = y;
-    eye.vertical_velocity = v;
-}
-
-/// Pure one-step vertical integrator (reused from s04): edge-triggered jump
-/// while grounded, gravity over `dt`, snap to the floor at [`EYE_HEIGHT`].
-fn step_vertical(y: f32, mut velocity: f32, jump: bool, dt: f32) -> (f32, f32) {
-    let grounded = y <= EYE_HEIGHT + f32::EPSILON;
-    if grounded && jump {
-        velocity = JUMP_SPEED;
-    }
-    velocity += GRAVITY * dt;
-    let mut new_y = y + velocity * dt;
-    if new_y <= EYE_HEIGHT {
-        new_y = EYE_HEIGHT;
-        velocity = 0.0;
-    }
-    (new_y, velocity)
 }
 
 /// THE proximity mechanic: each frame, set every beacon's `AudioSink` volume
