@@ -68,7 +68,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use crate::engine::hud;
-use crate::engine::input::MoveIntent;
+use crate::engine::input::{LookState, MoveIntent};
 use crate::engine::scene;
 
 use super::{AppState, SampleMeta};
@@ -109,6 +109,22 @@ const CARRIER_A_START: Vec3 = Vec3::new(-CARRY_HALF_SPAN, CARRY_Y, 0.0);
 /// Static floor half-extents (matches the shared render ground footprint).
 const FLOOR_HALF: Vec3 = Vec3::new(20.0, 0.05, 20.0);
 
+/// Orbit follow-camera distance / height around the carry-rig center.
+const CAMERA_DISTANCE: f32 = 9.0;
+const CAMERA_HEIGHT: f32 = 5.0;
+/// Tighter pitch clamp for the orbit camera (radians).
+const CAM_PITCH_MIN: f32 = -0.2;
+const CAM_PITCH_MAX: f32 = 1.0;
+
+/// Marks the orbit follow camera.
+#[derive(Component)]
+struct FollowCamera;
+
+/// Tags every entity of the carry rig (both carriers + plank) so `R` can despawn
+/// the whole rig with one simple query before respawning it.
+#[derive(Component)]
+struct CarryRig;
+
 /// Marks the player-driven carrier A.
 #[derive(Component)]
 struct CarrierA;
@@ -146,7 +162,14 @@ impl Plugin for CoopCarryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(AppState::S09CoopCarry), setup).add_systems(
             Update,
-            (drive_carrier_a, follow_carrier_b, toggle_attach, update_hud)
+            (
+                handle_reset,
+                drive_carrier_a,
+                follow_carrier_b,
+                toggle_attach,
+                update_hud,
+                orbit_camera,
+            )
                 .chain()
                 .run_if(in_state(AppState::S09CoopCarry)),
         );
@@ -184,10 +207,12 @@ fn setup(
 
     spawn_carry_rig(&mut commands, &mut meshes, &mut materials, state);
 
-    // Chase camera looking at the carry rig.
+    // Orbit follow camera around the carry rig (mouse-look yaw/pitch).
     commands.spawn((
+        FollowCamera,
         Camera3d::default(),
-        Transform::from_xyz(0.0, 7.0, 9.0).looking_at(Vec3::new(0.0, CARRY_Y, 0.0), Vec3::Y),
+        Transform::from_xyz(0.0, CAMERA_HEIGHT, CAMERA_DISTANCE)
+            .looking_at(Vec3::new(0.0, CARRY_Y, 0.0), Vec3::Y),
         scope.clone(),
     ));
 
@@ -213,8 +238,10 @@ fn setup(
         &mut commands,
         state,
         &[
-            "WASD — drive carrier A (B follows, lagging)",
+            "WASD — drive carrier A (camera-relative; B follows, lagging)",
+            "Mouse — orbit camera",
             "Space — drop / pick up the plank",
+            "R — reset the rig",
             "Esc — back to menu",
         ],
     );
@@ -244,6 +271,7 @@ fn spawn_carry_rig(
     let plank = commands
         .spawn((
             Plank,
+            CarryRig,
             Mesh3d(meshes.add(Cuboid::new(
                 PLANK_HALF.x * 2.0,
                 PLANK_HALF.y * 2.0,
@@ -266,6 +294,7 @@ fn spawn_carry_rig(
     // Carrier A (player-driven). Hosts the spherical joint to the plank's -X end.
     commands.spawn((
         CarrierA,
+        CarryRig,
         Mesh3d(carrier_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.2, 0.5, 0.9),
@@ -283,6 +312,7 @@ fn spawn_carry_rig(
     // Carrier B (AI follower). Hosts the spherical joint to the plank's +X end.
     commands.spawn((
         CarrierB,
+        CarryRig,
         Mesh3d(carrier_mesh),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.9, 0.5, 0.2),
@@ -310,14 +340,41 @@ fn carry_joint(plank_x_end: f32) -> SphericalJointBuilder {
         .local_anchor2(Vec3::ZERO)
 }
 
+/// `R` resets the carry rig: despawn the carriers + plank and respawn them at the
+/// start pose (zeroed velocities, fresh joints), and re-arm [`CarryState`] to
+/// attached. Despawn+respawn (as in s07) is the reliable reset for dynamic bodies
+/// — setting a dynamic body's `Transform` directly would be overwritten by rapier.
+fn handle_reset(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut state: ResMut<CarryState>,
+    rig_q: Query<Entity, With<CarryRig>>,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyR) {
+        return;
+    }
+    for entity in &rig_q {
+        commands.entity(entity).despawn();
+    }
+    spawn_carry_rig(&mut commands, &mut meshes, &mut materials, AppState::S09CoopCarry);
+    *state = CarryState::default();
+}
+
 /// Drives carrier A by writing its target linear velocity from the shared
-/// [`MoveIntent`]. Y velocity is preserved (gravity/joint forces own it); only
-/// the XZ plane is steered.
-fn drive_carrier_a(intent: Res<MoveIntent>, mut q: Query<&mut Velocity, With<CarrierA>>) {
+/// [`MoveIntent`], rotated by the camera yaw so WASD is camera-relative (matches
+/// the web peers). Y velocity is preserved (gravity/joint forces own it); only the
+/// XZ plane is steered.
+fn drive_carrier_a(
+    intent: Res<MoveIntent>,
+    look: Res<LookState>,
+    mut q: Query<&mut Velocity, With<CarrierA>>,
+) {
     let Ok(mut vel) = q.single_mut() else {
         return;
     };
-    let target = intent.dir * CARRIER_SPEED;
+    let target = (Quat::from_rotation_y(look.yaw) * intent.dir) * CARRIER_SPEED;
     vel.linear.x = target.x;
     vel.linear.z = target.z;
 }
@@ -382,12 +439,40 @@ fn toggle_attach(
     }
 }
 
-/// Writes the attach state to the HUD line.
-fn update_hud(state: Res<CarryState>, mut hud_q: Query<&mut Text, With<AttachHudText>>) {
+/// Writes the attach state + the plank's tilt (°) to the HUD line (the peers show
+/// a `tilt NN°` readout so you can judge how far the load has rolled).
+fn update_hud(
+    state: Res<CarryState>,
+    plank_q: Query<&Transform, With<Plank>>,
+    mut hud_q: Query<&mut Text, With<AttachHudText>>,
+) {
     let Ok(mut text) = hud_q.single_mut() else {
         return;
     };
-    **text = attach_label(state.attached).to_string();
+    let tilt = plank_q
+        .single()
+        .map(|t| tilt_degrees(t.rotation))
+        .unwrap_or(0.0);
+    **text = format!("{}  |  tilt {tilt:.0}°", attach_label(state.attached));
+}
+
+/// Orbit follow camera: circles the carry-rig center (midpoint of the two
+/// carriers) from the shared look yaw/pitch, so you can look around the load.
+/// Mirrors the s01 orbit pattern (its +Z "behind" vector keeps the camera trailing).
+fn orbit_camera(
+    look: Res<LookState>,
+    a_q: Query<&Transform, (With<CarrierA>, Without<FollowCamera>)>,
+    b_q: Query<&Transform, (With<CarrierB>, Without<FollowCamera>)>,
+    mut cam_q: Query<&mut Transform, With<FollowCamera>>,
+) {
+    let (Ok(a), Ok(b), Ok(mut cam)) = (a_q.single(), b_q.single(), cam_q.single_mut()) else {
+        return;
+    };
+    let center = (a.translation + b.translation) * 0.5;
+    let pitch = look.pitch.clamp(CAM_PITCH_MIN, CAM_PITCH_MAX);
+    let behind = Quat::from_euler(EulerRot::YXZ, look.yaw, pitch, 0.0) * Vec3::Z;
+    cam.translation = center + behind * CAMERA_DISTANCE + Vec3::Y * CAMERA_HEIGHT;
+    cam.look_at(center, Vec3::Y);
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +501,13 @@ fn follow_velocity(current: Vec3, target: Vec3, gain: f32, max_speed: f32) -> Ve
     } else {
         v
     }
+}
+
+/// The plank's tilt from level, in degrees: the angle between its local up
+/// (`rotation * Y`) and world up. 0° when flat; grows as it rolls/pitches. Pure
+/// so the readout is unit-testable.
+fn tilt_degrees(rotation: Quat) -> f32 {
+    (rotation * Vec3::Y).angle_between(Vec3::Y).to_degrees()
 }
 
 /// Pure HUD label for the attach state.
@@ -512,5 +604,26 @@ mod tests {
     fn attach_label_reflects_state() {
         assert_eq!(attach_label(true), "CARRYING — Space to drop");
         assert_eq!(attach_label(false), "DROPPED — Space to pick up");
+    }
+
+    /// Tilt is 0° when the plank is level and grows as it rolls. Non-tautological:
+    /// a known roll about Z by θ should read θ degrees of tilt (the up vector tips
+    /// by exactly the roll angle).
+    #[test]
+    fn tilt_degrees_measures_roll_from_level() {
+        assert!(tilt_degrees(Quat::IDENTITY).abs() < 1e-4, "level plank is 0°");
+
+        let theta = 0.5_f32; // radians
+        let rolled = Quat::from_rotation_z(theta);
+        assert!(
+            (tilt_degrees(rolled) - theta.to_degrees()).abs() < 1e-3,
+            "a {theta} rad roll should read {} degrees",
+            theta.to_degrees()
+        );
+        // A pure yaw (about Y) does not tilt the up vector → still 0°.
+        assert!(
+            tilt_degrees(Quat::from_rotation_y(1.0)).abs() < 1e-4,
+            "yaw alone is not tilt"
+        );
     }
 }
