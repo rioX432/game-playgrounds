@@ -113,8 +113,9 @@ function sample01Mount(ctx: SampleContext): () => void {
       yawPivot.position.z += worldZ;
     }
 
-    // Jump + gravity.
-    if (input.isKeyDown("Space") && grounded) {
+    // Jump + gravity. Edge-triggered: only fires on the frame Space is first
+    // pressed, so holding Space does NOT auto-bounce.
+    if (grounded && input.consumeJustPressed("Space")) {
       verticalVelocity = JUMP_SPEED;
       grounded = false;
     }

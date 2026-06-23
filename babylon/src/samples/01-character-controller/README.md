@@ -36,7 +36,9 @@ manually. This sample is the reference consumer of that module too.
 ## Feel & difficulty notes
 
 - **Feel**: Snappy and arcade-y. `GRAVITY = -22` and `JUMP_SPEED = 9` give a
-  short, punchy hop. Movement is instant (no acceleration ramp), which feels
+  short, punchy hop. The jump is **edge-triggered** (`input.consumeJustPressed`),
+  so holding `Space` fires exactly one hop instead of auto-bouncing on every
+  grounded frame. Movement is instant (no acceleration ramp), which feels
   responsive but a little "on rails" — add easing if you want weight.
 - **Difficulty**: Low. No physics engine involved; the hardest part is getting
   the yaw → world-space movement rotation correct.

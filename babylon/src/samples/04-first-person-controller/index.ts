@@ -75,7 +75,6 @@ function sample04Mount(ctx: SampleContext): () => void {
   let pitch = 0;
   let verticalVelocity = 0;
   let grounded = true;
-  let spaceWasDown = false; // edge-trigger jump so holding Space doesn't auto-bounce
   const floorY = GROUND_Y + EYE_HEIGHT;
 
   // --- Per-frame update ---
@@ -114,13 +113,13 @@ function sample04Mount(ctx: SampleContext): () => void {
       camera.position.z += worldZ;
     }
 
-    // Jump (edge-triggered) + gravity + ground clamp at eye height.
-    const spaceDown = input.isKeyDown("Space");
-    if (spaceDown && !spaceWasDown && grounded) {
+    // Jump (edge-triggered via the shared input) + gravity + ground clamp at
+    // eye height. consumeJustPressed fires only on the down-edge, so holding
+    // Space can't auto-bounce.
+    if (grounded && input.consumeJustPressed("Space")) {
       verticalVelocity = JUMP_SPEED;
       grounded = false;
     }
-    spaceWasDown = spaceDown;
 
     verticalVelocity += GRAVITY * dt;
     camera.position.y += verticalVelocity * dt;
