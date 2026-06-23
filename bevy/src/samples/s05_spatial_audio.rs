@@ -4,12 +4,16 @@
 //! proximity-voice stand-in (REPO / Content Warning style). Three procedurally
 //! generated beacon tones (distinct pitches) sit in the world; as the
 //! first-person player walks nearer/farther, each beacon's volume attenuates by
-//! the listener↔emitter distance. The sound is generated in-code (no asset
-//! files) via a custom `Decodable` audio source — a looping sine implementing
-//! rodio's `Source` + `Iterator<Item = f32>`, registered with
-//! `add_audio_source`. Falloff is driven by an explicit, unit-tested pure
-//! curve [`proximity_gain`] rather than relying on the engine's spatial scale,
-//! so the proximity→volume relationship is legible and verifiable headless.
+//! the listener↔emitter distance AND pans left/right by its direction. The sound
+//! is generated in-code (no asset files) via a custom `Decodable` audio source —
+//! a looping sine implementing rodio's `Source` + `Iterator<Item = f32>`,
+//! registered with `add_audio_source`. Direction is delivered by the engine's
+//! spatial audio (a `SpatialListener` on the eye + per-emitter
+//! `with_spatial(true)`), while loudness is shaped by an explicit, unit-tested
+//! pure curve [`proximity_gain`] written into the `SpatialAudioSink` volume each
+//! frame — so the proximity→volume relationship stays legible/verifiable headless
+//! and the engine adds the stereo panning the web siblings get from their
+//! positional nodes.
 //!
 //! **Controls:** Click to lock the mouse. `W/A/S/D` move (yaw-relative).
 //! `Mouse` looks. `Space` jumps. `Esc` returns to the menu (which releases the
@@ -18,27 +22,29 @@
 //!
 //! **Feel notes:** Walking toward a beacon and hearing it swell, then fade as
 //! you pass it, reads convincingly as a proximity voice — the distinct pitches
-//! make it obvious *which* emitter is near. The first-person movement is reused
-//! verbatim from s04, so it feels the same arcade-stiff way (instant
-//! accel/decel, no head-bob, you clip through the boxes). Honest bad parts:
-//! (1) attenuation here is **mono volume only** — there is no stereo panning or
-//! occlusion, so a beacon to your left and one to your right sound identical
-//! when equidistant; direction is invisible (a real proximity-voice game pans
-//! and muffles through walls). (2) The raw sine is a harsh, buzzy test tone, not
+//! make it obvious *which* emitter is near, and panning makes it obvious *which
+//! side* it's on. The first-person movement is reused verbatim from s04, so it
+//! feels the same arcade-stiff way (instant accel/decel, no head-bob, you clip
+//! through the boxes). Honest bad parts:
+//! (1) the engine pans L/R but does **not** occlude — a beacon behind a wall is
+//! as loud as one in the open (no muffling); a real proximity-voice game filters
+//! through geometry. (2) The raw sine is a harsh, buzzy test tone, not
 //! a pleasant voice — fine for verifying falloff, unpleasant to sit in.
 //! (3) Because gain is set per-frame from distance with no smoothing, fast
 //! strafing past a beacon can make the volume "zip" rather than glide. (4) All
 //! beacons play from frame zero at once, so at the spawn point you hear a chord
 //! of three tones until you move and they separate by distance.
 //!
-//! **Spatial vs manual-volume choice:** Bevy *does* offer engine spatial audio
-//! (`SpatialListener` on the camera + `PlaybackSettings::LOOP.with_spatial(true)`
-//! on the emitter, attenuating by listener distance with stereo panning). We
-//! deliberately drive `AudioSink` volume manually from our own
-//! [`proximity_gain`] curve instead: it makes the falloff law explicit and
-//! unit-testable (the engine's `spatial_scale` default makes falloff subtle and
-//! opaque), at the documented cost of losing the engine's stereo panning. The
-//! mechanic under test is *distance attenuation*, which this curve nails.
+//! **Spatial + explicit gain (how the two layers combine):** the emitters use
+//! engine spatial audio (`SpatialListener::new` on the eye +
+//! `PlaybackSettings::LOOP.with_spatial(true)`), which gives the **stereo
+//! panning** (and a mild engine distance attenuation). On top of that we still
+//! write the `SpatialAudioSink` volume from our explicit [`proximity_gain`] curve
+//! each frame, so the **loudness envelope stays controlled + unit-testable**
+//! (full inside `REF_DISTANCE`, hard zero past `MAX_DISTANCE`) while the engine
+//! supplies direction. Net: nearer = louder (our curve) and the correct side is
+//! louder (engine panning). The falloff constants are aligned to the
+//! Three.js/Babylon.js peers (linear, `REF_DISTANCE = 2`).
 //!
 //! **Autoplay note (vs the web siblings):** native Bevy audio needs **no user
 //! gesture** — the beacons start the instant the sample is entered. The
@@ -54,17 +60,22 @@
 //!   * rodio 0.20's `Source` requires `current_frame_len`/`channels`/
 //!     `sample_rate`/`total_duration`; an endless looping tone returns `None`
 //!     for the two length/duration methods.
-//!   * `AudioSink::set_volume` takes `&mut self` in 0.18 (was `&self`), so the
-//!     driver query is `Query<&mut AudioSink>`, and volume is a
-//!     `Volume::Linear(..)` — not a bare `f32`.
+//!   * With `with_spatial(true)` Bevy inserts a **`SpatialAudioSink`** component,
+//!     NOT `AudioSink` — the volume driver must query `Query<&mut
+//!     SpatialAudioSink>` or it will silently match nothing. Both implement
+//!     `AudioSinkPlayback::set_volume(&mut self, Volume::Linear(..))`.
+//!   * Direction needs exactly one `SpatialListener` (here `SpatialListener::new(
+//!     gap)`, ears on the entity's local X) on the eye; the engine's
+//!     `update_listener_positions` / `update_emitter_positions` systems read the
+//!     listener + emitter `GlobalTransform`s and pan automatically.
 //!   * Play a generated tone with `AudioPlayer(handle)` +
-//!     `PlaybackSettings::LOOP`; the handle comes from `Assets<BeaconTone>`.
+//!     `PlaybackSettings::LOOP.with_spatial(true)`; handle from `Assets<BeaconTone>`.
 //!   * `DespawnOnExit(state)` on each emitter despawns it on exit, which stops
 //!     its sink — that IS the audio teardown (no global audio resource leaks).
 //!   * Time delta is `time.delta_secs()` (f32); `Query::single_mut()` returns
 //!     `Result` — handle with `let Ok(..) = .. else`.
 
-use bevy::audio::{AddAudioSource, Source, Volume};
+use bevy::audio::{AddAudioSource, SpatialAudioSink, SpatialListener, Source, Volume};
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use core::time::Duration;
@@ -96,12 +107,16 @@ const JUMP_SPEED: f32 = 7.0;
 // --- Proximity attenuation curve ---------------------------------------------
 
 /// At or below this distance (world units) a beacon plays at full volume.
-const REF_DISTANCE: f32 = 1.5;
+/// Matches the Three.js/Babylon.js peers (`refDistance = 2`).
+const REF_DISTANCE: f32 = 2.0;
 /// At or beyond this distance (world units) a beacon is fully silent.
 const MAX_DISTANCE: f32 = 16.0;
-/// Curve shape: 1.0 = linear falloff; >1 front-loads loudness near the emitter
-/// (quieter sooner as you back away), which reads as a tighter "voice bubble".
-const ROLLOFF: f32 = 2.0;
+/// Curve shape: 1.0 = linear falloff (matches the web peers' `linear` distance
+/// model + `rolloffFactor = 1`); >1 would front-load loudness near the emitter.
+const ROLLOFF: f32 = 1.0;
+/// Distance between the listener's ears (world units), on the eye's local X.
+/// Exaggerated past a real head so the L/R panning is obvious in the demo.
+const EAR_GAP: f32 = 1.0;
 
 /// Pure proximity→gain law: full gain inside [`REF_DISTANCE`], zero at/after
 /// [`MAX_DISTANCE`], and a smooth `ROLLOFF`-shaped falloff between. Returns a
@@ -294,16 +309,22 @@ fn setup(
             MeshMaterial3d(beacon_material.clone()),
             Transform::from_translation(spec.position),
             AudioPlayer(handle),
-            PlaybackSettings::LOOP.with_volume(Volume::Linear(0.0)),
+            // Spatial: the engine pans by direction; volume starts at 0 and is
+            // raised each frame by the proximity curve.
+            PlaybackSettings::LOOP
+                .with_spatial(true)
+                .with_volume(Volume::Linear(0.0)),
             DespawnOnExit(state),
         ));
     }
 
     // The eye camera (sample-specific). Starts at eye height, looking down -Z.
+    // The `SpatialListener` makes it the ears for the engine's panning.
     commands.spawn((
         Eye::default(),
         Camera3d::default(),
         Transform::from_xyz(0.0, EYE_HEIGHT, 8.0),
+        SpatialListener::new(EAR_GAP),
         DespawnOnExit(state),
     ));
 
@@ -391,7 +412,7 @@ fn step_vertical(y: f32, mut velocity: f32, jump: bool, dt: f32) -> (f32, f32) {
 /// after spawn), so this no-ops gracefully until then.
 fn drive_proximity_volume(
     eye_query: Query<&Transform, With<Eye>>,
-    mut beacons: Query<(&Transform, &mut AudioSink), With<Beacon>>,
+    mut beacons: Query<(&Transform, &mut SpatialAudioSink), With<Beacon>>,
     mut hud_text: Query<&mut Text, With<FpsText>>,
 ) {
     let Ok(eye) = eye_query.single() else {

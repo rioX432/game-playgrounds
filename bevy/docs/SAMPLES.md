@@ -18,7 +18,7 @@ Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
 | 02 | Physics Grab & Throw | [`s02_physics_grab_throw.rs`](../src/samples/s02_physics_grab_throw.rs) | Rapier raycast grab → velocity-spring hold → throw by impulse |
 | 03 | Paint on Mesh | [`s03_paint_on_mesh.rs`](../src/samples/s03_paint_on_mesh.rs) | Drag-paint a sphere's runtime `Image` at the hit UV; palette + auto-rotate |
 | 04 | First-Person Controller | [`s04_first_person_controller.rs`](../src/samples/s04_first_person_controller.rs) | FPS move + pointer-lock look (yaw-relative) |
-| 05 | Spatial Audio — Proximity Falloff | [`s05_spatial_audio.rs`](../src/samples/s05_spatial_audio.rs) | Custom `Decodable` source + distance attenuation |
+| 05 | Spatial Audio — Proximity Falloff | [`s05_spatial_audio.rs`](../src/samples/s05_spatial_audio.rs) | Custom `Decodable` source + engine stereo panning (`SpatialListener`) + distance-attenuation gain curve |
 | 06 | Hide & Seek — Prop Disguise | [`s06_hide_and_seek.rs`](../src/samples/s06_hide_and_seek.rs) | Swap `Mesh3d`/`MeshMaterial3d` to blend into props |
 | 07 | Ragdoll | [`s07_ragdoll_core.rs`](../src/samples/s07_ragdoll_core.rs) | Jointed capsules flop under gravity; click to punch, R to reset |
 | 08 | Red Light, Green Light | [`s08_red_light_green_light.rs`](../src/samples/s08_red_light_green_light.rs) | だるまさんがころんだ state machine + motion check |
