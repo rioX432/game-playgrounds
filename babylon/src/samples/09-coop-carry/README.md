@@ -58,6 +58,14 @@ body onto the floor.
 - The follow gain (`CARRIER_B_FOLLOW_GAIN`) and move speed are the two constants
   that shape feel: higher gain = tighter, less sway; lower = more drama and more
   whip.
+- **Cross-engine note (deliberate divergence, kept on purpose):** these carriers
+  are `ANIMATED` (kinematic) — they pull on the joints but are *not* pushed back
+  by them, so the plank can never shove a carrier off course. The Three.js and
+  Bevy peers instead use **dynamic, rotation-locked** carriers that the plank
+  *can* perturb. We keep Babylon's animated approach rather than unifying: it is
+  exactly the kind of engine-idiom contrast this playground exists to surface
+  (Havok `setTargetTransform` kinematic drive vs a dynamic velocity-driven body),
+  and both produce the same out-of-sync sway. See `COMPARISON.md` §4.
 
 ## Babylon-specific gotchas
 

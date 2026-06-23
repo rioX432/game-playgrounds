@@ -183,6 +183,13 @@ makes you manage tree-shaken imports and a left-handed basis. Three is the most
 explicit and the most transparent. Bevy removes the entire web-WASM/async/autoplay
 class of problems but adds ECS lifecycle rules (despawn vs. resource reset).
 
+**One deliberate physics-idiom divergence we kept:** in co-op carry (09) the
+Babylon carriers are `ANIMATED` (kinematic) bodies driven by `setTargetTransform`
+— they pull the joints but can't be shoved back by the plank — whereas the Three
+and Bevy carriers are **dynamic, rotation-locked** bodies the plank *can* perturb.
+We left this unequal on purpose: it's exactly the kinematic-vs-dynamic contrast
+the playground exists to show, and both reach the same out-of-sync sway.
+
 ---
 
 ## 5. Performance — honest status
