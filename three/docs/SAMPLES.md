@@ -25,6 +25,7 @@ Deep-link any sample in the gallery via `#/<id>`.
 | 10 | Emote / Pose Radial Wheel | [`10-emote-wheel`](../src/samples/10-emote-wheel) | Hold F to open a radial wheel, aim to pick a sector, release to play the pose |
 | 11 | Top-Down Twin-Stick Movement | [`11-top-down-twin-stick`](../src/samples/11-top-down-twin-stick) | Decoupled move + aim — strafe while aiming elsewhere |
 | 12 | Tiny Planet Gravity | [`12-tiny-planet-gravity`](../src/samples/12-tiny-planet-gravity) | Spherical gravity + walk-on-sphere; up aligns to the surface normal |
+| 13 | Stress / Load Harness | [`13-stress-bodies`](../src/samples/13-stress-bodies) | Spawn batches of dynamic boxes; live `ms/frame` readout (cross-engine perf probe) |
 
 ## Shared foundation (`src/engine/`)
 
