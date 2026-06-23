@@ -34,9 +34,12 @@
 //!
 //! **Bevy 0.18 gotchas:**
 //!   * UI is `Node` + `Text::new(..)` + `TextFont`/`TextColor`/`BackgroundColor`
-//!     — no `NodeBundle`/`TextBundle`/`Style`. Absolute placement via `Node`'s
-//!     `position_type`/`left`/`top`. We compute each label's `left`/`top` from its
-//!     sector angle + a pixel radius around an assumed screen center.
+//!     — no `NodeBundle`/`TextBundle`/`Style`. The wheel is centered on the actual
+//!     viewport (any window size, follows resize) WITHOUT a window query: a
+//!     full-screen root with `justify_content`/`align_items: Center` places a
+//!     zero-size "hub" at screen center, and the dot + labels are absolutely
+//!     positioned relative to that hub (offsets around `Vec2::ZERO`). Flexbox
+//!     re-centers the hub on resize, so the labels follow for free.
 //!   * Rig parts are parented with `with_children`; child `Transform`s are LOCAL
 //!     to the root, so poses animate children relative to the body and the whole
 //!     rig still moves/rotates as one.
@@ -79,13 +82,8 @@ const DEAD_ZONE: f32 = 0.35;
 
 /// Number of emote sectors in the wheel.
 const NUM_SECTORS: usize = 10;
-/// Pixel radius of the wheel labels from the (assumed) screen center.
+/// Pixel radius of the wheel labels from the screen center.
 const WHEEL_RADIUS_PX: f32 = 180.0;
-/// Assumed screen center in pixels (matches the default window; the wheel is a
-/// fixed-position overlay, so this is an intentional simplification — see feel
-/// notes / gotchas).
-const SCREEN_CENTER_X: f32 = 640.0;
-const SCREEN_CENTER_Y: f32 = 360.0;
 
 /// How long a triggered pose plays before returning to idle (seconds).
 const POSE_DURATION: f32 = 1.6;
@@ -325,10 +323,11 @@ fn setup(
         scope.clone(),
     ));
 
-    // Wheel UI: a full-screen overlay (hidden by default) holding the ten sector
-    // labels positioned in a circle, plus a center dead-zone dot. Spawned ONCE
-    // and toggled via `Node.display`; `DespawnOnExit`-scoped so it cleans up.
-    let center = Vec2::new(SCREEN_CENTER_X, SCREEN_CENTER_Y);
+    // Wheel UI: a full-screen overlay (hidden by default) that centers a zero-size
+    // "hub" via flexbox; the dead-zone dot + sector labels hang off the hub by
+    // absolute offsets around its center, so the wheel sits at the true viewport
+    // center at any window size and follows a resize for free (no window query).
+    // Spawned ONCE and toggled via `Node.display`; `DespawnOnExit`-scoped.
     commands
         .spawn((
             WheelUi,
@@ -336,46 +335,58 @@ fn setup(
                 position_type: PositionType::Absolute,
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
+                // Center the single child (the hub) horizontally + vertically.
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 // Hidden until the wheel opens.
                 display: Display::None,
                 ..default()
             },
             scope.clone(),
         ))
-        .with_children(|parent| {
-            // Center dead-zone dot.
-            parent.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(center.x - 4.0),
-                    top: Val::Px(center.y - 4.0),
-                    width: Val::Px(8.0),
-                    height: Val::Px(8.0),
-                    ..default()
-                },
-                BackgroundColor(Color::srgb(0.6, 0.6, 0.6)),
-            ));
-            // Sector labels.
-            for (idx, emote) in Emote::ALL.iter().enumerate() {
-                let pos = sector_label_pos(idx, NUM_SECTORS, center, WHEEL_RADIUS_PX);
-                parent.spawn((
-                    SectorLabel(idx),
+        .with_children(|root| {
+            // Zero-size hub: flexbox parks its top-left at screen center; the dot
+            // and labels are positioned absolutely relative to it.
+            root.spawn(Node {
+                width: Val::Px(0.0),
+                height: Val::Px(0.0),
+                ..default()
+            })
+            .with_children(|hub| {
+                // Center dead-zone dot, centered on the hub.
+                hub.spawn((
                     Node {
                         position_type: PositionType::Absolute,
-                        left: Val::Px(pos.x - 28.0),
-                        top: Val::Px(pos.y - 10.0),
-                        padding: UiRect::all(Val::Px(4.0)),
+                        left: Val::Px(-4.0),
+                        top: Val::Px(-4.0),
+                        width: Val::Px(8.0),
+                        height: Val::Px(8.0),
                         ..default()
                     },
-                    BackgroundColor(SECTOR_IDLE_BG),
-                    Text::new(emote.label()),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.9, 0.9, 0.95)),
+                    BackgroundColor(Color::srgb(0.6, 0.6, 0.6)),
                 ));
-            }
+                // Sector labels, offset from the hub center by sector angle.
+                for (idx, emote) in Emote::ALL.iter().enumerate() {
+                    let pos = sector_label_pos(idx, NUM_SECTORS, Vec2::ZERO, WHEEL_RADIUS_PX);
+                    hub.spawn((
+                        SectorLabel(idx),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(pos.x - 28.0),
+                            top: Val::Px(pos.y - 10.0),
+                            padding: UiRect::all(Val::Px(4.0)),
+                            ..default()
+                        },
+                        BackgroundColor(SECTOR_IDLE_BG),
+                        Text::new(emote.label()),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.9, 0.9, 0.95)),
+                    ));
+                }
+            });
         });
 
     // HUD: controls + current-emote status line.
