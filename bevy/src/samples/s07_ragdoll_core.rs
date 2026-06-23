@@ -62,9 +62,11 @@
 //!     (not screen center): `Camera::viewport_to_world(&GlobalTransform, cursor)`
 //!     → a `Ray3d`; cast it with `ReadRapierContext::single()?.cast_ray(origin,
 //!     dir, max_toi, true, QueryFilter::default())` → `Option<(Entity, f32)>`,
-//!     then set `ExternalImpulse { impulse, .. }` on the hit bone along the ray.
-//!     Every failure (no cursor, degenerate ray, no hit, hit a non-bone) is
-//!     guarded — a miss does nothing, never panics.
+//!     then set BOTH `ExternalImpulse { impulse, torque_impulse }` on the hit
+//!     bone: the impulse is applied at the hit point (`r × J` torque, `r` = hit −
+//!     center of mass), so off-center hits spin the limb — matching the peers'
+//!     `applyImpulseAtPoint`. Every failure (no cursor, degenerate ray, no hit,
+//!     hit a non-bone) is guarded — a miss does nothing, never panics.
 //!   * bevy_rapier writes each dynamic body's pose back into its entity
 //!     `Transform` every frame — READ `Transform` directly, never copy by hand.
 //!     Global gravity defaults to -9.81 Y, so the ragdoll falls on its own.
@@ -517,7 +519,7 @@ fn push_on_click(
     rapier: ReadRapierContext,
     window_query: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform), With<RagdollCamera>>,
-    mut bones: Query<&mut ExternalImpulse, With<RagdollBone>>,
+    mut bones: Query<(&mut ExternalImpulse, &GlobalTransform), With<RagdollBone>>,
 ) {
     if !buttons.just_pressed(MouseButton::Left) {
         return;
@@ -543,11 +545,19 @@ fn push_on_click(
     let dir = ray.direction.as_vec3();
     // cast_ray(origin, dir, max_toi, solid, filter). solid=true reports a hit
     // even if the origin starts inside a shape; QueryFilter::default queries all.
-    if let Some((entity, _toi)) =
+    if let Some((entity, toi)) =
         ctx.cast_ray(ray.origin, dir, RAY_MAX_TOI, true, QueryFilter::default())
     {
-        if let Ok(mut impulse) = bones.get_mut(entity) {
-            impulse.impulse = push_impulse(dir);
+        if let Ok((mut impulse, bone_xform)) = bones.get_mut(entity) {
+            // Apply the impulse AT the hit point (not the center of mass), so an
+            // off-center hit imparts spin — the satisfying "spin the limb"
+            // behavior the Three.js/Babylon.js peers get from
+            // `applyImpulseAtPoint`. An impulse J at offset r from the COM adds a
+            // linear J plus an angular `r × J` (all world-space).
+            let hit_point = ray.get_point(toi);
+            let (linear, torque) = push_impulse_at(dir, hit_point, bone_xform.translation());
+            impulse.impulse = linear;
+            impulse.torque_impulse = torque;
         }
     }
 }
@@ -557,6 +567,16 @@ fn push_on_click(
 /// Guards a zero/degenerate direction by returning no impulse.
 fn push_impulse(dir: Vec3) -> Vec3 {
     dir.normalize_or_zero() * PUSH_IMPULSE
+}
+
+/// Pure "impulse at a point" math: the linear impulse (along the ray) plus the
+/// angular impulse `r × J` it imparts when applied at `hit_point` rather than the
+/// body's center of mass `com`. A center-of-mass hit (`hit_point == com`) yields
+/// zero torque; an off-center hit spins the bone. Kept pure for headless tests.
+fn push_impulse_at(dir: Vec3, hit_point: Vec3, com: Vec3) -> (Vec3, Vec3) {
+    let linear = push_impulse(dir);
+    let torque = (hit_point - com).cross(linear);
+    (linear, torque)
 }
 
 #[cfg(test)]
@@ -672,6 +692,31 @@ mod tests {
     fn push_impulse_of_zero_direction_is_zero() {
         let impulse = push_impulse(Vec3::ZERO);
         assert_eq!(impulse, Vec3::ZERO, "a zero ray must not push (no NaN)");
+    }
+
+    /// Applying the impulse AT the hit point spins the bone: an off-center hit
+    /// produces a non-zero torque (`r × J`) perpendicular to both the offset and
+    /// the impulse, while a dead-center hit (hit == COM) produces none. This is
+    /// the headline parity feature — Bevy previously pushed only at the COM.
+    #[test]
+    fn off_center_hit_imparts_spin() {
+        let dir = Vec3::new(0.0, 0.0, -1.0); // impulse toward -Z
+        let com = Vec3::new(0.0, 1.0, 0.0);
+
+        // Dead-center hit: no torque.
+        let (lin_c, torque_c) = push_impulse_at(dir, com, com);
+        assert_eq!(torque_c, Vec3::ZERO, "a center-of-mass hit must not spin");
+        assert!((lin_c.length() - PUSH_IMPULSE).abs() < 1e-4);
+
+        // Off-center hit, offset along +X from the COM: r × J with r=+X, J=-Z
+        // gives a torque about +Y (X × -Z = +Y) — the bone yaws.
+        let hit = com + Vec3::X * 0.3;
+        let (_lin, torque) = push_impulse_at(dir, hit, com);
+        assert!(torque.length() > 1e-4, "off-center hit must impart spin");
+        assert!(
+            torque.x.abs() < 1e-4 && torque.z.abs() < 1e-4 && torque.y > 0.0,
+            "offset +X, impulse -Z should torque about +Y, got {torque:?}"
+        );
     }
 
     /// Reset rebuilds the FULL spec: a reset spawns exactly one body per bone, so

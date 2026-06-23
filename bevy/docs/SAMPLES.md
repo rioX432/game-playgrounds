@@ -20,7 +20,7 @@ Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
 | 04 | First-Person Controller | [`s04_first_person_controller.rs`](../src/samples/s04_first_person_controller.rs) | FPS move + pointer-lock look (yaw-relative) |
 | 05 | Spatial Audio — Proximity Falloff | [`s05_spatial_audio.rs`](../src/samples/s05_spatial_audio.rs) | Custom `Decodable` source + engine stereo panning (`SpatialListener`) + distance-attenuation gain curve |
 | 06 | Hide & Seek — Prop Disguise | [`s06_hide_and_seek.rs`](../src/samples/s06_hide_and_seek.rs) | Swap `Mesh3d` to blend into matching prop decoys; eased red-tint + wobble tell |
-| 07 | Ragdoll | [`s07_ragdoll_core.rs`](../src/samples/s07_ragdoll_core.rs) | Jointed capsules flop under gravity; click to punch, R to reset |
+| 07 | Ragdoll | [`s07_ragdoll_core.rs`](../src/samples/s07_ragdoll_core.rs) | Jointed capsules flop under gravity; click to punch at the hit point (off-center = spin), R to reset |
 | 08 | Red Light, Green Light | [`s08_red_light_green_light.rs`](../src/samples/s08_red_light_green_light.rs) | だるまさんがころんだ state machine + motion check |
 | 09 | Co-op Carry | [`s09_coop_carry.rs`](../src/samples/s09_coop_carry.rs) | Plank jointed to two carriers (one P-controlled follower) |
 | 10 | Emote / Pose Radial Wheel | [`s10_emote_wheel.rs`](../src/samples/s10_emote_wheel.rs) | Bevy-UI radial wheel → apply a procedural pose |
