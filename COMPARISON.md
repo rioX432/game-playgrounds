@@ -9,6 +9,18 @@ header) plus measured code size and the AI-agent development experience.
 > is qualitative (feel, "performance is fine"), it says so. Where a gap exists
 > (no load test yet), it says so too.
 
+> **Parity note (important).** An early draft of this doc compared the engines
+> assuming the three ports were mechanically equal. A later cross-engine code
+> review (Claude Code + Codex, June 2026) found the **Bevy** ports were quietly
+> *simplified* on several demos — 01 (no look/jump/gravity), 02 (shove, not
+> grab/hold/throw), 03 (flat quad, one color, click-only), 05 (mono, no panning),
+> 06 (box decoys, hard tint), 07 (impulse at the center of mass, no off-center
+> spin), 10 (wheel mis-centered off the default window) — while Three.js ↔
+> Babylon.js were already tight. Those gaps have since been **closed** (PRs
+> #97–#103), plus a Babylon edge-jump fix (#104). The conclusions below now hold
+> on near-equal mechanics; where the earlier convergence was partly an artifact
+> of Bevy *not implementing* the differing feature, that is called out inline.
+
 - **The lineup:** character controller · grab & throw · paint-on-mesh ·
   first-person · spatial audio · hide-and-seek disguise · ragdoll ·
   red-light/green-light · co-op carry · emote wheel · top-down twin-stick ·
@@ -25,7 +37,7 @@ header) plus measured code size and the AI-agent development experience.
 | **AI-dev fit** | ◎ fast loop, tiny surface | ◎ fast loop, batteries-included | ○ slow compiles, but `cargo check` + types catch bugs early |
 | **Feel (these mechanics)** | same as Babylon — feel came from *our* tuning, not the engine | same as Three | same — identical tuning, identical feel |
 | **Physics ergonomics** | manual Rapier step + transform sync | **Havok auto-steps & syncs** (least boilerplate) | manual Rapier, but writes back to `Transform` for you |
-| **Code size (same mechanics)** | **leanest** (3,757 LOC) | close (3,922) | heaviest (~4,550 logic + ~1,100 tests) |
+| **Code size (same mechanics)** | **leanest** (3,757 LOC) | close (3,922) | heaviest (~4,900 logic + ~1,240 tests) |
 | **Performance (these scenes)** | fine (WebGL) | fine (WebGL) | fine (native), most headroom — *not load-tested* |
 | **Deployment to Steam** | wrap in Electron | wrap in Electron | already a native `.exe` |
 
@@ -42,30 +54,35 @@ Measured (`wc -l`) on sample source only:
 
 | # | Mechanic | Three | Babylon | Bevy |
 |---|----------|------:|--------:|-----:|
-| 01 | Character controller | 166 | 153 | 190 |
-| 02 | Physics grab & throw | 173 | 152 | 154 |
-| 03 | Paint on mesh | 147 | 143 | 240 |
+| 01 | Character controller | 166 | 153 | 344² |
+| 02 | Physics grab & throw | 173 | 152 | 260² |
+| 03 | Paint on mesh | 147 | 143 | 411² |
 | 04 | First-person controller | 151 | 155 | 305 |
-| 05 | Spatial audio | 307 | 320 | 494 |
-| 06 | Hide & seek disguise | 333 | 359 | 474 |
-| 07 | Ragdoll | 451 | 452 | 701 |
+| 05 | Spatial audio | 307 | 320 | 515² |
+| 06 | Hide & seek disguise | 333 | 359 | 464² |
+| 07 | Ragdoll | 451 | 452 | 746² |
 | 08 | Red light, green light | 371 | 382 | 642 |
 | 09 | Co-op carry | 505 | 417 | 516 |
-| 10 | Emote wheel | 482 | 496 | 729 |
+| 10 | Emote wheel | 482 | 496 | 740² |
 | 11 | Top-down twin-stick | 216 | 192 | 377 |
 | 12 | Tiny planet | 455 | 701¹ | 824 |
-| | **Total (samples)** | **3,757** | **3,922** | **5,646** |
+| | **Total (samples)** | **3,757** | **3,922** | **6,144²** |
 | | Shared engine helpers | 741 | 657 | 647 |
 
 ¹ Babylon split 12 into `12a` spherical-gravity (280) + `12b` tiny-planet (421).
+² Grew when the demo was brought to parity with the TS peers (PRs #97–#103); the
+pre-parity figures were 190 / 154 / 240 / 494 / 474 / 701 / 729 and a 5,646 total.
 
-**The Bevy gap is smaller than it looks.** Of Bevy's 5,646 sample LOC, ~1,099 are
+**The Bevy gap is smaller than it looks.** Of Bevy's 6,144 sample LOC, ~1,240 are
 inline `#[cfg(test)]` headless tests (the Bevy DoD requires at least one per
 sample; the TS playgrounds have none inline). Excluding tests, Bevy sample logic
-is **~4,547 LOC — roughly 20% heavier** than the TS versions. That remainder is
-the honest cost of Rust: explicit type signatures, ECS plugin/system/component
-wiring, and more verbose Rapier setup. It buys compile-time guarantees the TS
-samples don't get.
+is **~4,900 LOC — roughly 25% heavier** than the TS versions. Part of that gap is
+real parity work: closing the Bevy simplifications (see the Parity note) *added*
+~500 LOC of genuine mechanic + test code, so the figure rose rather than fell once
+the ports were made equal — which only sharpens the finding that Bevy is the
+heaviest. The rest is the honest cost of Rust: explicit type signatures, ECS
+plugin/system/component wiring, and more verbose Rapier setup. It buys
+compile-time guarantees the TS samples don't get.
 
 **Three is consistently the leanest** because Three.js is a *rendering library* —
 you compose Rapier and a few helpers and nothing else is in the way. Babylon is a
@@ -118,6 +135,14 @@ The honest feel notes across 36 sample writeups converge on one thing:
 
 > **For these mechanics, feel was driven by our implementation choices, not by the
 > engine.** The same tuning produced the same feel in all three.
+
+> **Caveat (the parity trap):** this only holds *after* the Bevy ports were brought
+> to parity. Part of the original "identical feel" was an illusion of omission —
+> e.g. you can't compare ragdoll-punch feel if Bevy applies the impulse at the
+> center of mass (no spin), or spatial-audio direction if Bevy plays mono. Once
+> those features were actually implemented (PRs #93, #91, …), the *tuned* feel did
+> converge — but the convergence was earned, not free. Verify parity before
+> trusting a cross-engine "feel is identical" claim.
 
 Recurring verdicts that appear **identically** in Three, Babylon, *and* Bevy:
 - **"arcade-stiff / slidey-free"** — every movement sample uses instant
