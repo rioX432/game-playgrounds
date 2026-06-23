@@ -10,7 +10,8 @@
 //! Cycle the disguise with `Q`/`E`. Third-person on purpose — you must SEE your
 //! own disguise to judge the blend, so a follow camera (from s01) is reused.
 //!
-//! **Controls:** `W/A/S/D` move (world axes; the prop turns to face travel). `Q`
+//! **Controls:** `W/A/S/D` move (camera-relative; the prop turns to face travel),
+//! `Mouse` orbits the follow camera. `Q`
 //! previous disguise, `E` next (wraps both ways). `Esc` returns to the menu.
 //!
 //! **Feel notes:** Cycling disguises is instant and tactile — the mesh pops to
@@ -49,7 +50,7 @@
 use bevy::prelude::*;
 
 use crate::engine::hud;
-use crate::engine::input::MoveIntent;
+use crate::engine::input::{LookState, MoveIntent};
 use crate::engine::scene;
 
 use super::{AppState, SampleMeta};
@@ -63,8 +64,14 @@ pub const META: SampleMeta = SampleMeta {
 
 /// Player movement speed in world units / second (matches the TS peers).
 const MOVE_SPEED: f32 = 5.0;
-/// Camera offset behind/above the player (world units).
-const CAMERA_OFFSET: Vec3 = Vec3::new(0.0, 6.0, 10.0);
+/// Orbit follow-camera distance / height around the player (world units).
+const CAMERA_DISTANCE: f32 = 9.0;
+const CAMERA_HEIGHT: f32 = 4.0;
+/// Tighter pitch clamp for the orbit camera (radians).
+const CAM_PITCH_MIN: f32 = -0.2;
+const CAM_PITCH_MAX: f32 = 1.0;
+/// Height above the player the camera aims at.
+const LOOK_AT_HEIGHT: f32 = 0.8;
 /// Speed (world units / second) above which the disguise is broken (EXPOSED).
 /// Matches the TS peers; absorbs float jitter so a still player is never EXPOSED.
 const EXPOSE_SPEED_THRESHOLD: f32 = 0.2;
@@ -199,7 +206,7 @@ fn setup(
     commands.spawn((
         FollowCamera,
         Camera3d::default(),
-        Transform::from_translation(start + CAMERA_OFFSET).looking_at(start, Vec3::Y),
+        Transform::from_xyz(0.0, CAMERA_HEIGHT, CAMERA_DISTANCE).looking_at(start, Vec3::Y),
         scope.clone(),
     ));
 
@@ -225,7 +232,8 @@ fn setup(
         &mut commands,
         state,
         &[
-            "WASD — move (breaks disguise!)",
+            "WASD — move (camera-relative; breaks disguise!)",
+            "Mouse — orbit camera",
             "Q / E — cycle disguise",
             "Esc — back to menu",
         ],
@@ -267,20 +275,23 @@ fn build_catalog(
     ]
 }
 
-/// Moves the player on the XZ plane from the shared [`MoveIntent`] (world axes,
-/// W = -Z) and, while moving, updates the facing yaw to the travel direction so
-/// the prop turns to face where it walks (mirrors the TS peers).
+/// Moves the player on the XZ plane from the shared [`MoveIntent`], rotated by the
+/// camera yaw so WASD is camera-relative (matches the TS peers). While moving it
+/// updates the facing yaw to the world travel direction so the prop turns to face
+/// where it walks.
 fn move_player(
     time: Res<Time>,
     intent: Res<MoveIntent>,
+    look: Res<LookState>,
     mut query: Query<(&mut Transform, &mut Player)>,
 ) {
     let Ok((mut transform, mut player)) = query.single_mut() else {
         return;
     };
     if intent.dir != Vec3::ZERO {
-        transform.translation += intent.dir * MOVE_SPEED * time.delta_secs();
-        player.facing_yaw = intent.dir.x.atan2(intent.dir.z);
+        let world_dir = Quat::from_rotation_y(look.yaw) * intent.dir;
+        transform.translation += world_dir * MOVE_SPEED * time.delta_secs();
+        player.facing_yaw = world_dir.x.atan2(world_dir.z);
     }
 }
 
@@ -358,16 +369,21 @@ fn update_tell(
     }
 }
 
-/// Hard-offset follow camera (no smoothing — matches s01's feel notes).
+/// Orbit follow camera: circles the player from the shared look yaw/pitch, so you
+/// can look around your disguise to judge the blend (matches the TS peers). The
+/// s01 orbit pattern — its +Z "behind" vector keeps the camera trailing.
 fn follow_camera(
+    look: Res<LookState>,
     player: Query<&Transform, (With<Player>, Without<FollowCamera>)>,
     mut camera: Query<&mut Transform, With<FollowCamera>>,
 ) {
     let (Ok(player), Ok(mut cam)) = (player.single(), camera.single_mut()) else {
         return;
     };
-    cam.translation = player.translation + CAMERA_OFFSET;
-    cam.look_at(player.translation, Vec3::Y);
+    let pitch = look.pitch.clamp(CAM_PITCH_MIN, CAM_PITCH_MAX);
+    let behind = Quat::from_euler(EulerRot::YXZ, look.yaw, pitch, 0.0) * Vec3::Z;
+    cam.translation = player.translation + behind * CAMERA_DISTANCE + Vec3::Y * CAMERA_HEIGHT;
+    cam.look_at(player.translation + Vec3::Y * LOOK_AT_HEIGHT, Vec3::Y);
 }
 
 /// Pure helper: the disguise is broken (EXPOSED) when speed exceeds the tolerance
