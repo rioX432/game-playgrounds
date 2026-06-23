@@ -26,6 +26,13 @@ export interface InputController {
   /** True while the key (by `KeyboardEvent.code`, e.g. "KeyW") is held. */
   isKeyDown(code: string): boolean;
   /**
+   * Returns `true` exactly once per physical key press (the down-edge), then
+   * clears it. Auto-repeat KEYDOWNs while the key is held do NOT re-trigger.
+   * Use for one-shot actions (e.g. jump) so holding the key can't re-fire every
+   * frame. Mirrors the Three sibling's `consumeJustPressed`.
+   */
+  consumeJustPressed(code: string): boolean;
+  /**
    * Consume the accumulated raw horizontal look movement (pixels) since the last
    * call, then reset it to 0. Callers apply their own sensitivity scaling.
    */
@@ -61,6 +68,8 @@ export function createInput(
   const usePointerLock = options.pointerLock ?? true;
 
   const pressed = new Set<string>();
+  // Keys whose down-edge has not yet been consumed (edge-triggered actions).
+  const justPressed = new Set<string>();
   let lookX = 0;
   let lookY = 0;
   let pointerLocked = false;
@@ -71,6 +80,9 @@ export function createInput(
     scene.onKeyboardObservable.add((info) => {
       const code = info.event.code;
       if (info.type === KeyboardEventTypes.KEYDOWN) {
+        // Only the true down-edge sets justPressed; auto-repeat KEYDOWNs while
+        // the key is already held are ignored (pressed already contains it).
+        if (!pressed.has(code)) justPressed.add(code);
         pressed.add(code);
       } else if (info.type === KeyboardEventTypes.KEYUP) {
         pressed.delete(code);
@@ -112,6 +124,13 @@ export function createInput(
     isKeyDown(code: string): boolean {
       return pressed.has(code);
     },
+    consumeJustPressed(code: string): boolean {
+      if (justPressed.has(code)) {
+        justPressed.delete(code);
+        return true;
+      }
+      return false;
+    },
     consumeLookX(): number {
       const v = lookX;
       lookX = 0;
@@ -138,6 +157,7 @@ export function createInput(
         }
       }
       pressed.clear();
+      justPressed.clear();
       pointerLocked = false;
     },
   };
