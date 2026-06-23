@@ -26,6 +26,7 @@ Deep-link any sample in the gallery via `#/<id>`.
 | 11 | Top-Down Twin-Stick Movement | [`11-top-down-twin-stick`](../src/samples/11-top-down-twin-stick) | Decoupled move + aim — strafe while aiming elsewhere |
 | 12a | Spherical Gravity | [`12a-spherical-gravity`](../src/samples/12a-spherical-gravity) | Walk on a sphere; up aligns to the surface normal |
 | 12b | Tiny Planet | [`12b-tiny-planet`](../src/samples/12b-tiny-planet) | Tiny-planet scene + damped follow camera |
+| 13 | Stress / Load Harness | [`13-stress-bodies`](../src/samples/13-stress-bodies) | Spawn batches of dynamic boxes; live `ms/frame` readout (cross-engine perf probe) |
 
 > Sample 12 is split into **12a** (spherical-gravity core) and **12b** (tiny-planet
 > scene + camera polish), matching the core/polish issue split.
