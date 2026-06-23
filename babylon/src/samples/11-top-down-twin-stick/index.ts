@@ -1,5 +1,7 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Plane } from "@babylonjs/core/Maths/math.plane";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
+import "@babylonjs/core/Culling/ray"; // side-effect: Scene.createPickingRay
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -50,7 +52,7 @@ function sample11Mount(ctx: SampleContext): () => void {
 
   // --- Lighting / ground / obstacles (scene-owned, freed by scene.dispose). ---
   createLightPreset(scene);
-  const ground = createGround(scene); // the ground is the aim raycast target
+  createGround(scene); // floor (render only; aim now uses an infinite plane)
   createBoxGrid(scene, { columns: 4, rows: 4, boxSize: 2, spacing: 6 });
 
   // --- Player rig: a yaw node carrying the disc body + nose. ---
@@ -118,6 +120,11 @@ function sample11Mount(ctx: SampleContext): () => void {
   // Last valid aim yaw, held when the cursor's ray misses the ground.
   let aimYaw = 0;
   const move = new Vector3();
+  // The infinite ground plane (y = GROUND_Y) the cursor ray is intersected with.
+  const groundPlane = Plane.FromPositionAndNormal(
+    new Vector3(0, GROUND_Y, 0),
+    new Vector3(0, 1, 0),
+  );
 
   const update = (): void => {
     const dt = scene.getEngine().getDeltaTime() / 1000;
@@ -136,11 +143,18 @@ function sample11Mount(ctx: SampleContext): () => void {
       rig.position.z += move.z * MOVE_SPEED * dt;
     }
 
-    // --- Aim: pick the cursor against the ground mesh for a world aim point.
-    // scene.pick can miss (cursor off the ground / null pickedPoint); on a miss
-    // we hold the last facing and hide the reticle. ---
-    const hit = scene.pick(scene.pointerX, scene.pointerY, (m) => m === ground.mesh);
-    const aim = hit?.pickedPoint;
+    // --- Aim: intersect the cursor ray with the INFINITE ground plane (y =
+    // GROUND_Y), not the ground mesh — so aiming past the mesh's edge still
+    // resolves a world point (matches the Three/Bevy peers). A miss only happens
+    // when the ray is parallel to the plane; then we hold the last facing. ---
+    const ray = scene.createPickingRay(
+      scene.pointerX,
+      scene.pointerY,
+      Matrix.Identity(),
+      camera,
+    );
+    const distance = ray.intersectsPlane(groundPlane);
+    const aim = distance !== null ? ray.origin.add(ray.direction.scale(distance)) : null;
     if (aim) {
       const dx = aim.x - rig.position.x;
       const dz = aim.z - rig.position.z;
