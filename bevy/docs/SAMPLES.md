@@ -26,6 +26,7 @@ Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
 | 10 | Emote / Pose Radial Wheel | [`s10_emote_wheel.rs`](../src/samples/s10_emote_wheel.rs) | Bevy-UI radial wheel → apply a procedural pose |
 | 11 | Top-Down Twin-Stick Movement | [`s11_top_down_twin_stick.rs`](../src/samples/s11_top_down_twin_stick.rs) | Decoupled move + cursor aim (free cursor, no pointer-lock) |
 | 12 | Tiny Planet | [`s12_tiny_planet.rs`](../src/samples/s12_tiny_planet.rs) | Spherical gravity + walk-on-sphere + props + damped follow camera |
+| 13 | Stress / Load Harness | [`s13_stress_bodies.rs`](../src/samples/s13_stress_bodies.rs) | Spawn batches of dynamic boxes; live `ms/frame` readout (cross-engine perf probe) |
 
 ## Shared foundation (`src/engine/`)
 
