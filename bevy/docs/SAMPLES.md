@@ -22,7 +22,7 @@ Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
 | 06 | Hide & Seek — Prop Disguise | [`s06_hide_and_seek.rs`](../src/samples/s06_hide_and_seek.rs) | Swap `Mesh3d` to blend into matching prop decoys; eased red-tint + wobble tell |
 | 07 | Ragdoll | [`s07_ragdoll_core.rs`](../src/samples/s07_ragdoll_core.rs) | Jointed capsules flop under gravity; click to punch at the hit point (off-center = spin), R to reset |
 | 08 | Red Light, Green Light | [`s08_red_light_green_light.rs`](../src/samples/s08_red_light_green_light.rs) | だるまさんがころんだ state machine + motion check + background reddens in RED |
-| 09 | Co-op Carry | [`s09_coop_carry.rs`](../src/samples/s09_coop_carry.rs) | Plank jointed to two carriers (one P-controlled follower) |
+| 09 | Co-op Carry | [`s09_coop_carry.rs`](../src/samples/s09_coop_carry.rs) | Plank jointed to two carriers (one P-controlled follower); orbit cam, R-reset, tilt° HUD |
 | 10 | Emote / Pose Radial Wheel | [`s10_emote_wheel.rs`](../src/samples/s10_emote_wheel.rs) | Bevy-UI radial wheel → apply a procedural pose |
 | 11 | Top-Down Twin-Stick Movement | [`s11_top_down_twin_stick.rs`](../src/samples/s11_top_down_twin_stick.rs) | Decoupled move + cursor aim (free cursor, no pointer-lock) |
 | 12 | Tiny Planet | [`s12_tiny_planet.rs`](../src/samples/s12_tiny_planet.rs) | Spherical gravity + walk-on-sphere + props + damped follow camera |
