@@ -82,10 +82,23 @@ function sample02Mount(ctx: SampleContext): () => void {
     }
 
     // --- Grab / hold / throw ---
+    // Click-to-grab, click-to-throw (a single toggle), matching the Three.js and
+    // Bevy peers — one interaction grammar across all three engines.
     let held: Mesh | null = null;
 
     const onPointerDown = (e: PointerEvent): void => {
-      // Cast a ray from the camera through the pointer. Pick only dynamic bodies.
+      // Holding a body: this click throws it along the camera forward + releases.
+      if (held) {
+        const dir = camera
+          .getForwardRay(1)
+          .direction.normalize()
+          .scale(THROW_IMPULSE);
+        held.physicsBody?.applyImpulse(dir, held.getAbsolutePosition());
+        held = null;
+        return;
+      }
+      // Nothing held: cast a ray from the camera through the pointer and grab the
+      // nearest dynamic body in range.
       const ray = scene.createPickingRay(
         scene.pointerX,
         scene.pointerY,
@@ -103,22 +116,9 @@ function sample02Mount(ctx: SampleContext): () => void {
       void e;
     };
 
-    const onPointerUp = (): void => {
-      if (!held) return;
-      // Throw along the current camera forward direction.
-      const dir = camera
-        .getForwardRay(1)
-        .direction.normalize()
-        .scale(THROW_IMPULSE);
-      held.physicsBody?.applyImpulse(dir, held.getAbsolutePosition());
-      held = null;
-    };
-
     canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointerup", onPointerUp);
     cleanups.push(() => {
       canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointerup", onPointerUp);
     });
 
     // Spring the held body toward a point in front of the camera each frame.
@@ -144,7 +144,7 @@ export const sample02: Sample = {
   id: "02-physics-grab-throw",
   title: "Physics Grab & Throw (Havok)",
   summary:
-    "Havok world: raycast from the camera to grab the nearest dynamic box, hold it at a distance, release to throw.",
+    "Havok world: click to grab the nearest dynamic box, hold it at a distance, click again to throw.",
   tags: ["physics", "havok", "raycast", "impulse"],
   mount: sample02Mount,
 };

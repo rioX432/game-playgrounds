@@ -5,7 +5,9 @@
 A real rigid-body world driven by Babylon's Havok physics v2 plugin: a static
 floor, several dynamic boxes, and a raycast-based grab/hold/throw interaction. The
 held body is sprung toward a point in front of the camera each frame, then thrown
-with an impulse on release. This is the "REPO / Gang Beasts"-style toy mechanic.
+with an impulse on the next click. This is the "REPO / Gang Beasts"-style toy
+mechanic. Click-to-grab / click-to-throw matches the Three.js and Bevy peers (one
+interaction grammar across all three engines).
 
 ## Controls
 
@@ -13,8 +15,8 @@ with an impulse on release. This is the "REPO / Gang Beasts"-style toy mechanic.
 |-------|--------|
 | Left-drag | Orbit camera |
 | Mouse wheel | Zoom |
-| Pointer down (on a box) | Grab the nearest dynamic box |
-| Pointer up | Throw the held box along the camera forward |
+| Click (on a box) | Grab the nearest dynamic box |
+| Click (while holding) | Throw the held box along the camera forward |
 
 ## Feel & difficulty notes
 
