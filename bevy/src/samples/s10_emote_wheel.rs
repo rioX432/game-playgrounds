@@ -1,8 +1,8 @@
 //! # s10 — Emote / pose radial wheel
 //!
-//! **What it demonstrates:** Hold a key (`Q`) to open a radial emote wheel; move
+//! **What it demonstrates:** Hold a key (`F`) to open a radial emote wheel; move
 //! the mouse to aim a selection vector; the nearest sector highlights (with a
-//! center dead-zone that selects nothing); releasing `Q` snaps to the highlighted
+//! center dead-zone that selects nothing); releasing `F` snaps to the highlighted
 //! sector and plays that emote/pose on a multi-part primitive character. Ten
 //! emotes are laid out in a circle as absolutely-positioned UI labels around
 //! screen center. Poses are procedural Transform animations on the rig's child
@@ -63,7 +63,7 @@ use super::{AppState, SampleMeta};
 pub const META: SampleMeta = SampleMeta {
     id: "10-emote-wheel",
     title: "Emote / pose radial wheel",
-    summary: "Hold Q to open a radial emote wheel, aim with the mouse, release to play a pose.",
+    summary: "Hold F to open a radial emote wheel, aim with the mouse, release to play a pose.",
     tags: &["ui", "radial-menu", "emote", "pose", "input"],
 };
 
@@ -97,11 +97,11 @@ enum Emote {
     Spin,
     Crouch,
     Sit,
-    Cheer,
     Point,
+    Clap,
     Nod,
-    Shrug,
-    Dance,
+    Cheer,
+    Bow,
 }
 
 impl Emote {
@@ -112,11 +112,11 @@ impl Emote {
         Emote::Spin,
         Emote::Crouch,
         Emote::Sit,
-        Emote::Cheer,
         Emote::Point,
+        Emote::Clap,
         Emote::Nod,
-        Emote::Shrug,
-        Emote::Dance,
+        Emote::Cheer,
+        Emote::Bow,
     ];
 
     /// Short label shown in the wheel + HUD.
@@ -127,11 +127,11 @@ impl Emote {
             Emote::Spin => "Spin",
             Emote::Crouch => "Crouch",
             Emote::Sit => "Sit",
-            Emote::Cheer => "Cheer",
             Emote::Point => "Point",
+            Emote::Clap => "Clap",
             Emote::Nod => "Nod",
-            Emote::Shrug => "Shrug",
-            Emote::Dance => "Dance",
+            Emote::Cheer => "Cheer",
+            Emote::Bow => "Bow",
         }
     }
 }
@@ -233,7 +233,7 @@ struct SectorLabel(usize);
 struct EmoteStatusText;
 
 /// The key that opens the wheel while held.
-const WHEEL_KEY: KeyCode = KeyCode::KeyQ;
+const WHEEL_KEY: KeyCode = KeyCode::KeyF;
 
 pub struct EmoteWheelPlugin;
 
@@ -394,7 +394,7 @@ fn setup(
         &mut commands,
         state,
         &[
-            "Hold Q — open emote wheel",
+            "Hold F — open emote wheel",
             "Move mouse — aim sector",
             "Release Q — play emote",
             "WASD — move",
@@ -577,20 +577,15 @@ fn animate_pose(
         Emote::Nod => {
             head_t.rotation = Quat::from_rotation_x(phase.sin() * 0.4);
         }
-        // Both arms out + a small shoulder shrug bounce.
-        Emote::Shrug => {
-            left_t.rotation = Quat::from_rotation_z(0.6);
-            right_t.rotation = Quat::from_rotation_z(-0.6);
-            let bounce = phase.sin().abs() * 0.1;
-            left_t.translation.y = 0.2 + bounce;
-            right_t.translation.y = 0.2 + bounce;
+        // Bring both arms in front and clap (oscillate the gap rhythmically).
+        Emote::Clap => {
+            let close = phase.sin().abs() * 0.4;
+            left_t.rotation = Quat::from_rotation_z(0.5 + close);
+            right_t.rotation = Quat::from_rotation_z(-0.5 - close);
         }
-        // Sway the body + swing both arms (a simple dance).
-        Emote::Dance => {
-            root_t.rotation = Quat::from_rotation_z((phase * 0.5).sin() * 0.25);
-            left_t.rotation = Quat::from_rotation_z(phase.sin() * 0.8);
-            right_t.rotation = Quat::from_rotation_z(-phase.sin() * 0.8);
-            root_t.translation.y = 1.0 + phase.sin().abs() * 0.1;
+        // Bow: bend the whole rig forward and back over the duration.
+        Emote::Bow => {
+            root_t.rotation = Quat::from_rotation_x((t * std::f32::consts::PI).sin() * 0.9);
         }
     }
 }
