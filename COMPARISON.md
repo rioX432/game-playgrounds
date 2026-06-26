@@ -216,8 +216,14 @@ piece of this repo** and the obvious next issue.
 - **Steam process (all three):** developer signup + $100 (recouped at $1,000
   earned) + store page + upload; you keep 70%.
 
-Not yet exercised in this repo (no sample has been packaged). Native (Bevy) is the
-shortest path; web needs the Electron shell but reuses the entire codebase.
+**Exercised on macOS (arm64).** Both routes have been built end-to-end: the
+Three.js build packages into an Electron `.dmg`/`.app` (≈95 MB) that launches and
+renders the gallery, and Bevy's `cargo build --release` yields a native ≈95 MB
+binary. Native (Bevy) is the shortest path; web needs the Electron shell but
+reuses the entire codebase. Still **[maintainer]**: code signing / notarization,
+the Windows `.exe` cross-build, and the Steamworks upload (all credential-gated).
+See `docs/PACKAGING.md` for the verified commands and the packaged-content-path
+fix (`process.resourcesPath`).
 
 ---
 

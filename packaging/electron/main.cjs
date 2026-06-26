@@ -11,11 +11,18 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("node:path");
 
-// Resolve the web build's dist dir. Relative to the repo root by default.
+// Resolve the web build's dist dir.
+//   * WEB_DIST env var wins (dev: point at three/ or babylon/ `dist/`).
+//   * Packaged app: load the `web` dir bundled via electron-builder
+//     `extraResources` (it lives under `process.resourcesPath`, NOT next to the
+//     repo — the unpacked .app has no `../../three/dist`).
+//   * Dev (unpackaged, no env): default to the repo's three/ build.
 const repoRoot = path.resolve(__dirname, "..", "..");
 const webDist = process.env.WEB_DIST
   ? path.resolve(process.env.WEB_DIST)
-  : path.join(repoRoot, "three", "dist");
+  : app.isPackaged
+    ? path.join(process.resourcesPath, "web")
+    : path.join(repoRoot, "three", "dist");
 
 function createWindow() {
   const win = new BrowserWindow({
