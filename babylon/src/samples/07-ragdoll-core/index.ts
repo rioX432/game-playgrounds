@@ -16,7 +16,7 @@ import "@babylonjs/core/Meshes/Builders/groundBuilder";
 import "@babylonjs/core/Meshes/Builders/capsuleBuilder";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 
-import { getHavokPlugin } from "../../engine/havok";
+import { createHavokPlugin } from "../../engine/havok";
 import { createHud } from "../../engine/hud";
 import { createGround, createLightPreset } from "../../engine/scene";
 import type { Sample, SampleContext } from "../types";
@@ -362,8 +362,13 @@ function sample07Mount(ctx: SampleContext): () => void {
 
   // Async because Havok WASM loads on demand. Guard with `disposed` so a fast
   // sample switch during the await never builds the world or the ragdoll.
-  void getHavokPlugin().then((plugin) => {
-    if (disposed) return;
+  void createHavokPlugin().then((plugin) => {
+    // Switched away mid-load: dispose the orphan plugin so it doesn't leak its
+    // native world (it was never handed to a scene that would dispose it).
+    if (disposed) {
+      plugin.dispose();
+      return;
+    }
     scene.enablePhysics(new Vector3(0, GRAVITY_Y, 0), plugin);
 
     // Static floor collider so the ragdoll lands on something (mass 0 = static).

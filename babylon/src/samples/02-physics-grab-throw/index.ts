@@ -14,7 +14,7 @@ import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Culling/ray";
 import "@babylonjs/core/Physics/physicsEngineComponent";
 
-import { getHavokPlugin } from "../../engine/havok";
+import { createHavokPlugin } from "../../engine/havok";
 import type { Sample, SampleContext } from "../types";
 
 const HOLD_DISTANCE = 6; // units in front of the camera the held body floats
@@ -49,8 +49,13 @@ function sample02Mount(ctx: SampleContext): () => void {
 
   // Async because Havok WASM loads on demand. We guard with `disposed` in case
   // the user switches samples before the runtime finishes loading.
-  void getHavokPlugin().then((plugin) => {
-    if (disposed) return;
+  void createHavokPlugin().then((plugin) => {
+    // Switched away mid-load: dispose the orphan plugin so it doesn't leak its
+    // native world (it was never handed to a scene that would dispose it).
+    if (disposed) {
+      plugin.dispose();
+      return;
+    }
     scene.enablePhysics(new Vector3(0, -9.81, 0), plugin);
 
     // --- Floor ---

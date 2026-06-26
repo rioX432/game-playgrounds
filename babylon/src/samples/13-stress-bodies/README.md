@@ -30,7 +30,7 @@ cost climb as the body count rises. A live readout shows
 
 ## Babylon-specific gotchas
 
-- Havok WASM loads on demand via `getHavokPlugin()`; physics is enabled per scene
+- Havok WASM loads on demand via `createHavokPlugin()`; physics is enabled per scene
   with `scene.enablePhysics(gravity, plugin)`, guarded by a `disposed` flag.
 - Each body is a `PhysicsAggregate(mesh, BOX, { mass: 1 }, scene)`; Havok writes
   the body pose back to the mesh automatically every frame.
