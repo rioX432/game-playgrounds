@@ -16,6 +16,10 @@ import type { Sample, SampleContext } from "../types";
 const TEX_SIZE = 1024;
 const BRUSH_RADIUS = 28;
 const BASE_COLOR = "#cccccc";
+// Idle spin speed in rad/SECOND (delta-scaled, refresh-rate independent).
+// 0.003 rad/frame x 60 fps = 0.18 rad/s preserves the original 60 Hz feel.
+// (The Bevy peer uses 0.3 rad/s; kept at 0.18 to match the original here.)
+const AUTOROTATE_SPEED = 0.18;
 const PALETTE = ["#ff3b30", "#34c759", "#0a84ff", "#ffd60a", "#ff2d92", "#000000"];
 
 const sample: Sample = {
@@ -61,9 +65,13 @@ const sample: Sample = {
 
     // Slow idle rotation so the unpainted side is reachable.
     let autoRotate = true;
-    const spin = () => {
+    let last = performance.now();
+    const spin = (now: number) => {
       raf = requestAnimationFrame(spin);
-      if (autoRotate && !painting) mesh.rotation.y += 0.003;
+      // Delta seconds, clamped to avoid huge jumps after tab-switch.
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      if (autoRotate && !painting) mesh.rotation.y += AUTOROTATE_SPEED * dt;
     };
     raf = requestAnimationFrame(spin);
 
