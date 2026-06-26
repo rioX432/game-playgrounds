@@ -63,9 +63,9 @@ const MOVE_SPEED: f32 = 6.0;
 /// Eye height above the floor (world units) — the camera's resting Y.
 const EYE_HEIGHT: f32 = 1.7;
 /// Gravity acceleration (world units / second^2), pulling the eye down.
-const GRAVITY: f32 = -20.0;
+const GRAVITY: f32 = -22.0;
 /// Upward velocity imparted by a jump (world units / second).
-const JUMP_SPEED: f32 = 7.0;
+const JUMP_SPEED: f32 = 9.0;
 /// Reference-prop box grid dimensions (columns x rows).
 const BOX_GRID_COLS: u32 = 3;
 const BOX_GRID_ROWS: u32 = 3;
