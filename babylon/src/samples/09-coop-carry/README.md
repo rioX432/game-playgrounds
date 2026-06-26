@@ -69,7 +69,7 @@ body onto the floor.
 
 ## Babylon-specific gotchas
 
-- **Async Havok WASM vs. disposal race.** `getHavokPlugin()` loads the runtime on
+- **Async Havok WASM vs. disposal race.** `createHavokPlugin()` loads the runtime on
   demand; everything (world, bodies, constraints, the per-frame observer) is built
   inside the `.then()` and guarded by a `disposed` flag so a fast sample switch
   during the await never builds physics or starts updating after teardown.

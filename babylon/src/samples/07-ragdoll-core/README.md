@@ -143,7 +143,7 @@ visible for clicking; see the feel note on depth below).
 - **Babylon auto-steps + syncs.** With `scene.enablePhysics` on, you do **not**
   write a step loop or copy body transforms to meshes (the Rapier sample does
   both). Each `PhysicsAggregate` keeps its mesh in sync every frame.
-- **Async WASM disposal race.** `getHavokPlugin()` resolves asynchronously; the
+- **Async WASM disposal race.** `createHavokPlugin()` resolves asynchronously; the
   world, floor, and ragdoll are built only inside the `.then`, guarded by a
   `disposed` flag so a fast sample switch before Havok finishes loading never
   builds into a torn-down scene.

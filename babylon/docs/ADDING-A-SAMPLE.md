@@ -87,7 +87,7 @@ export default sampleNN;
   up by `scene.dispose()`. Return a dispose fn that removes them.
 - **Guard async setup.** If you `await` anything (e.g. Havok), the sample may be
   disposed first — track a `disposed` boolean and bail. See sample 02.
-- **Physics:** call `getHavokPlugin()` from `src/engine/havok.ts`, then
+- **Physics:** call `createHavokPlugin()` from `src/engine/havok.ts`, then
   `scene.enablePhysics(gravity, plugin)`. Use `PhysicsAggregate` (v2 API).
 - **Overlay UI:** append controls into `document.getElementById("overlay")` and
   remove them in dispose. Style with `pointer-events: auto` (the overlay is
