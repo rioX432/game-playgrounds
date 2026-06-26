@@ -10,7 +10,7 @@
 //! the yaw, CROUCH lowers + squashes, SIT lowers + tilts, etc. A pose plays for a
 //! fixed duration then returns to idle.
 //!
-//! **Controls:** Hold `Q` to open the wheel, move the mouse to aim, release `Q`
+//! **Controls:** Hold `F` to open the wheel, move the mouse to aim, release `F`
 //! to emote. `W/A/S/D` move the character. `Esc` returns to the menu.
 //!
 //! **Feel notes:** Aiming with relative mouse motion (pointer-lock, no absolute
@@ -396,7 +396,7 @@ fn setup(
         &[
             "Hold F — open emote wheel",
             "Move mouse — aim sector",
-            "Release Q — play emote",
+            "Release F — play emote",
             "WASD — move",
             "Esc — back to menu",
         ],
