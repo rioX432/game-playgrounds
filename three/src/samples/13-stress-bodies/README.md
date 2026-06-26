@@ -23,10 +23,11 @@ piece — it turns "performance is fine, probably" into something you can measur
   `ms/frame` number climbs as Rapier's solver and the draw calls add up. Where it
   crosses ~16.7 ms (60 FPS) on your machine is the honest headroom for these
   light scenes.
-- **Honest caveat — numbers are NOT in COMPARISON.md.** Capturing matched
-  ms/frame across Three / Babylon / Bevy (same body count, same machine) must be
-  done by *running* each build; asserting numbers without measuring would be
-  dishonest. This harness produces the measurement; recording it is a follow-up.
+- **Measured numbers are now in COMPARISON.md §5.** Matched ms/frame across
+  Three / Babylon / Bevy (same body count, same machine — Apple Silicon Mac,
+  120 Hz) were captured by *running* each build: Three hits ~61 fps (16.4 ms) at
+  2000 bodies, vs Babylon ~76 fps and Bevy still pinned at the 120 Hz cap. See §5
+  for the full table, method, and caveats.
 - **Rendering is not instanced.** Boxes share one geometry + material but are
   individual meshes, so at high counts draw cost (not just physics) shows.
   Instanced rendering is the obvious next step to isolate physics cost.
