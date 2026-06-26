@@ -21,10 +21,11 @@ cost climb as the body count rises. A live readout shows
 - **The point is the ramp.** Tap `Space` and the `ms/frame` number climbs as the
   Havok solver + draw calls add up; where it crosses ~16.7 ms (60 FPS) on your
   machine is the honest headroom.
-- **Honest caveat — numbers are NOT in COMPARISON.md.** Matched ms/frame across
-  Three / Babylon / Bevy must be captured by *running* each build; asserting
-  numbers without measuring would be dishonest. This harness produces the
-  measurement; recording it is a follow-up.
+- **Measured numbers are now in COMPARISON.md §5.** Matched ms/frame across
+  Three / Babylon / Bevy were captured by *running* each build (Apple Silicon Mac,
+  120 Hz): Babylon holds ~76 fps (13.1 ms) at 2000 bodies — better than Three's
+  ~61 fps under the same WebGL ceiling, while Bevy stays at the 120 Hz cap. See §5
+  for the full table, method, and caveats.
 - Boxes are clones of one hidden template (shared geometry + material) — not thin
   instances, so at high counts draw cost shows alongside physics.
 

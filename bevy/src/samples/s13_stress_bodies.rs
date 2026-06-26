@@ -13,11 +13,12 @@
 //! the `ms/frame` number climbs as the rapier solver + draw calls add up. Where it
 //! crosses ~16.7 ms (60 FPS) on your machine is the honest headroom.
 //!
-//! **Honest caveat:** numbers are read at RUNTIME and intentionally NOT recorded
-//! in COMPARISON.md. Capturing matched ms/frame across the three engines (same
-//! body count, same machine) must be done by running each build; asserting numbers
-//! without measuring would be dishonest. This sample produces the measurement; the
-//! results write-up is a follow-up.
+//! **Measured numbers are now in COMPARISON §5.** Matched ms/frame across the
+//! three engines (same body count, same machine — Apple Silicon Mac, 120 Hz) were
+//! captured by running each build. Native Bevy stays pinned at the 120 Hz vsync
+//! cap (8.3 ms) all the way to 2000 bodies where the web engines fall to 61-76 fps;
+//! uncapped, Bevy renders + simulates 2000 bodies in ~6.3 ms (~160 fps). See §5
+//! for the full table, method, and caveats.
 //!
 //! **Bevy 0.18 gotchas:**
 //!   * Boxes share one `Mesh3d`/`MeshMaterial3d` handle (stored in a resource) so

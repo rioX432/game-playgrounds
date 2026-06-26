@@ -38,7 +38,7 @@ header) plus measured code size and the AI-agent development experience.
 | **Feel (these mechanics)** | same as Babylon — feel came from *our* tuning, not the engine | same as Three | same — identical tuning, identical feel |
 | **Physics ergonomics** | manual Rapier step + transform sync | **Havok auto-steps & syncs** (least boilerplate) | manual Rapier, but writes back to `Transform` for you |
 | **Code size (same mechanics)** | **leanest** (3,757 LOC) | close (3,922) | heaviest (~4,900 logic + ~1,240 tests) |
-| **Performance (these scenes)** | fine (WebGL) | fine (WebGL) | fine (native), most headroom — *not load-tested* |
+| **Performance (2000-body stress, 120 Hz Mac)** | 61 fps (16.4 ms) | 76 fps (13.1 ms) | **120 fps capped (~6.3 ms uncapped)** — most headroom (see §5) |
 | **Deployment to Steam** | wrap in Electron | wrap in Electron | already a native `.exe` |
 
 **One-line take:** for *these* light, single-machine mechanics the three engines
@@ -194,17 +194,50 @@ the playground exists to show, and both reach the same out-of-sync sway.
 
 ## 5. Performance — honest status
 
-**Not yet rigorously benchmarked.** Every sample here is a *light* scene (a few
-dozen meshes, one ragdoll, ~30 props), and all three engines run them at frame
-rate with headroom. That is the honest extent of what we can claim today.
+The gameplay samples are all *light* scenes (a few dozen meshes, one ragdoll, ~30
+props) and run at frame rate with headroom in all three engines. To put a number
+on the headroom, the **stress sample (13-stress-bodies)** — identical tuning in
+all three (100-body batches, 0.3 m cubes, 24 m floor, up to 2000 dynamic bodies) —
+was measured at matched body counts.
 
-What we can say from architecture (see the root README "performance ladder"):
-`WebGL < WebGPU < native`. Bevy (native wgpu) has the most ceiling; Three/Babylon
-on WebGL are the entry tier but **plenty for the light games this playground
-targets**. The gap only appears under heavy load — which we have **not** stress-
-tested. A proper comparison needs a stress sample (thousands of bodies / draw
-calls) and frame-time capture in each engine. **That is the most valuable missing
-piece of this repo** and the obvious next issue.
+**Method (honest about its limits).** One machine: Apple Silicon Mac, **120 Hz
+ProMotion** display. Production builds (`vite preview` for web, `cargo build
+--release` for Bevy). The web engines were driven in real headed Chrome over the
+DevTools Protocol; Bevy ran natively. The number is the sample's own EMA-smoothed
+`ms/frame` read off its HUD at each body count. **Single run, EMA-smoothed, not a
+rigorous benchmark** — and physics cost is not isolated from draw cost.
+
+| bodies | Three (Rapier · WebGL) | Babylon (Havok · WebGL) | Bevy (Rapier · native wgpu) |
+|------:|:----------------------:|:-----------------------:|:---------------------------:|
+| 100   | 8.3 ms (120 fps) | 8.3 ms (120) | 8.3 ms (120) |
+| 500   | 8.4 ms (120) | 8.4 ms (119) | 8.4 ms (120) |
+| 1000  | 8.3 ms (120) | 8.3 ms (120) | 8.3 ms (120) |
+| 1500  | 11.5 ms (87) | 9.7 ms (104) | 8.3 ms (120) |
+| 2000  | **16.4 ms (61)** | **13.1 ms (76)** | **8.3 ms (120)** |
+
+**Read it carefully — the 8.3 ms rows are the 120 Hz vsync cap, not the engine.**
+Up to ~1000 bodies every engine is display-limited (8.3 ms = 1000/120), so those
+rows say nothing about compute headroom. The signal is **where each engine falls
+off the cap**:
+
+- **Three (Rapier on WebGL)** saturates first — 87 fps at 1500, **61 fps (16.4 ms)
+  at 2000**.
+- **Babylon (Havok on WebGL)** holds longer — 104 fps at 1500, **76 fps (13.1 ms)
+  at 2000**. On these scenes Havok+Babylon degrades less than Rapier+Three under
+  the same WebGL ceiling (a combined physics+draw effect; not isolated here).
+- **Bevy (native wgpu)** never drops below the 120 Hz cap, even at 2000 bodies.
+
+To see *Bevy's* true cost (the cap hides it), a second run with **vsync off**:
+~3.8 ms at 500 bodies, ~4.4 ms at 1000, ~5.3 ms at 1500, **~6.3 ms (~160 fps) at
+2000**. So native renders + simulates the full 2000-body scene in the time the web
+engines need just to stay at 60 fps — concretely confirming the `WebGL < native`
+ladder. (Web can't be measured uncapped: `requestAnimationFrame` is vsync-locked,
+so sub-8.3 ms web cost is simply unobservable in a browser.)
+
+**Caveats this does NOT settle:** one machine / one run; physics vs. draw cost not
+separated; deterministic (Bevy) vs. random (web) scatter (negligible for timing);
+no WebGPU path measured (would lift the web ceiling); thermal/background-load
+variance not controlled.
 
 ---
 
