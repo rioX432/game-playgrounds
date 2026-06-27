@@ -67,12 +67,16 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 | `protocol/` | TypeScript shared types (measurement schema + wire DTOs) | locked schema (#140) + thin DTOs (#141) |
 | `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141) |
 | `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142) |
+| `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143) |
 
 > Build: `cd net/protocol && npm install && npm run typecheck` (must stay green).
 > Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
 > Build: `cd net/web-three && npm install && npm run build && npm test` (must stay green).
-> This chapter has its **own** web client (`web-three`) and does **not** touch the
-> `../three`, `../babylon`, or `../bevy` builds.
+> Build: `cd net/web-babylon && npm install && npm run build && npm test` (must stay green).
+> This chapter has its **own** web clients (`web-three`, `web-babylon`) and does
+> **not** touch the `../three`, `../babylon`, or `../bevy` builds. The two web
+> clients piggyback the **same** server + room ("game"); they differ ONLY in the
+> render/input layer, so cross-client (three <-> babylon) mutual visibility holds.
 
 ### Colyseus version pin (caveat)
 
