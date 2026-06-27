@@ -290,39 +290,214 @@ from "fine, probably" into numbers.
 
 ---
 
-## 8. Networking (chapter 2) — skeleton
+## 8. Networking (chapter 2) — measured
 
-> Status: **skeleton only.** This section locks the *measurement axes* up front; the
-> numbers land as the `net/` samples are built. The measurement schema is fixed in
-> `net/protocol/src/metrics.ts` (one `MetricsSample` == one `metrics.jsonl` line);
-> chapter rules live in `net/CLAUDE.md`. Web side piggybacks on **Colyseus**, native
-> side on **Bevy 0.18 + bevy_replicon**.
+> Status: **measured.** Every number below comes from an **actual run on one
+> machine** (Apple Silicon, arm64, macOS 26.6, Node v22, Bevy native) over
+> **localhost** — same seed (`12345`), same scenario ids/stages across both stacks,
+> so the lines join on `scenario` + stage knobs. The raw `metrics.jsonl` evidence
+> (six files) lives in `net/measurements/n2/` with the exact commands; this section
+> is the synthesis. Schema: `net/protocol/src/metrics.ts` (one `MetricsSample` ==
+> one line). Chapter rules: `net/CLAUDE.md`. **This is single-machine / localhost,
+> not a WAN or viral-scale benchmark** (see §8.6).
 
-### 8.1 Scope & pattern
+### 8.1 Scope & pattern — and what "cross-engine" really means here
 
-- Server-authoritative simulation + client-side interpolation.
-- Same engines as chapter 1, compared on netcode behavior — not on a specific game.
+- Server-authoritative simulation + client-side interpolation, the same pattern on
+  both stacks. The client never trusts itself; it buffers timestamped snapshots and
+  renders from `now − interpDelay`.
+- The cross-engine axis is **web stack vs. native stack**, NOT three-vs-babylon:
+  - **three and babylon share the SAME Colyseus server** (`net/server`) and the same
+    room. Their N2 **server-side** metrics (tick cost, bytes, snapshot cadence) are
+    therefore *identical by construction* — they differ only in the **client render**
+    layer, which is a chapter-1 (N1) distinction, not a netcode one. So the web runs
+    below are emitted once (engine label `three`); a babylon column would be a copy.
+  - **Bevy + bevy_replicon + renet** is the independent native stack.
+- So read §8 as **"web (Colyseus, three+babylon clients) vs. Bevy native
+  (replicon/renet)"**. Presenting three fake-independent server columns would be
+  dishonest (Core Value #1).
 
-### 8.2 Measurement axes
+### 8.2 Measurement axes — and which are actually comparable
 
-- **Bandwidth** — app payload up/down (`bytesUpPerSec`, `bytesDownPerSec`) vs.
-  estimated on-the-wire (`transportBytesPerSec`).
-- **Latency** — `rttP50Ms` / `rttP95Ms` (client monotonic ts + echoed seq).
-- **Snapshot freshness** — `snapshotAgeMs` (interpolation-buffer depth).
-- **Server tick budget** — `serverTickSimMs` / `serverTickSerializeMs` /
-  `serverTickSendMs`.
-- **Injected network conditions** — `injectedDelayCtoSMs`, `injectedDelayStoCMs`,
-  `lossPct`.
-- **Scale knobs** — `tickRate`, `clientCount`, `botCount`, `seed`, `scenario`.
+The schema shape is identical across engines, but two stacks **cannot mirror every
+field's measurement basis**. Before any cross-engine read, separate the two classes
+(full gap table: `net/bevy/CLAUDE.md` → "Honest-parity"; chapter note: `net/CLAUDE.md`):
+
+**(a) Truly apples-to-apples — compare these directly:**
+
+- **`serverTickSimMs`** — pure authoritative integration cost. Same definition both
+  sides (timed sim set). **The one clean cross-engine performance number.**
+- **`injectedDelayCtoSMs` / `injectedDelayStoCMs` / `lossPct`** — the impairment
+  *knobs*, identical by definition (`lossPct = max(up,down)`).
+- **`snapshotAgeMs`** — same *definition* (interp-buffer depth), and its **response**
+  to a knob (rises with injected down-delay, falls with higher tick) is comparable.
+  Its **absolute floor is not**: web uses an in-process shared monotonic clock (exact,
+  ~1 ms), while the Bevy probe's in-process manual pump quantizes the floor to ≈ one
+  tick period **plus interp delay** (so Bevy's floor is ~115–260 ms, not a real-network
+  latency). Compare the **shape**, not the absolute.
+
+**(b) Documented parity GAP — do NOT naively compare the two numbers:**
+
+- **`bytesUpPerSec` / `bytesDownPerSec`** — web sizes the **JSON** payload
+  (`JSON.stringify` length); Bevy sizes the **postcard** binary payload (replicon's
+  native encoder) of only the *changed* components. Different **encoding**, not
+  different netcode efficiency. The absolute bytes are incomparable; the **scaling
+  with entity count / tick** is.
+- **`transportBytesPerSec`** — on Bevy this is **real renet wire bytes**
+  (`network_info`, incl. renet framing); on web it is an **estimate** (app payload +
+  a constant framing overhead). Different basis entirely.
+- **`rttP50Ms` / `rttP95Ms`** — web RTT is an **app-echo** that passes *through* the
+  app-level latency shim, so it **includes** injected delay. Bevy RTT is **renet
+  transport RTT**, measured *below* the app-level injection, so it **excludes**
+  injected delay (GAP 2) and is additionally quantized by the manual pump. Comparing
+  the two RTT columns directly is the headline trap of this chapter (§8.4, axis 2).
+  (The GAP numbering follows `net/bevy/CLAUDE.md` → "Honest-parity": GAP 1 = both
+  stacks inject impairment at the app level, not the transport — see §8.3.)
+- **`bytesUpPerSec` under a tick sweep** (GAP 3) — web sends input at a fixed 30 Hz
+  regardless of tick; Bevy sends input in `FixedUpdate`, i.e. at the tick rate. So
+  uplink is flat on web but scales with tick on Bevy. Don't cross-compare uplink in
+  the tick sweep.
 
 ### 8.3 Per-engine implementation notes
 
-_TBD — filled per sample._
+- **Web (Colyseus, three + babylon).** We **piggyback** Colyseus for rooms /
+  transport / routing but broadcast our **own** snapshot frames each tick (no
+  `@colyseus/schema` auto-sync) so application bytes are directly measurable and the
+  pattern mirrors replicon. Latency/loss is an **app-level `TransportShim`** over
+  Colyseus's reliable channel (no real UDP loss / congestion). Bots are
+  server-internal entities (no socket); only real connected clients are RTT probes.
+- **Bevy (replicon/renet).** Server writes small sim components via `set_if_neq`, so
+  replicon sends only **changed** values (an idle player produces no traffic). renet
+  2.0 ships **no network conditioner**, so impairment is injected **app-level** too
+  (uplink: server folding a received input; downlink: probe client folding a
+  replicated mutation into its interp buffer) — same observable effect as the web
+  shim, but RTT sits above it (GAP 2). The probe boots a headless server + N real-UDP
+  probe clients in one process and pumps `update()` at the tick cadence.
 
-### 8.4 Numbers
+### 8.4 Numbers — the four axes
 
-_TBD — populated from `metrics.jsonl` runs._
+All runs: `seed=12345`, `clientCount=2`, `WARMUP_MS=500`, `MEASURE_MS=1500`. Bytes
+in KB/s. **Web = three+babylon (same server); Bevy = native.** Mind the §8.2 gaps.
 
-### 8.5 Feel / friction
+**Axis 1 — synchronized-entity ramp** (`n2-stress-ramp`, tick 20, clean link).
+*How does cost grow as the synchronized world scales 2 → 100 bots?*
 
-_TBD — honest per-engine notes, same spirit as §3/§4._
+| bots | `serverTickSimMs` **(comparable)** | `bytesDownPerSec` (encoding gap) | `transportBytesPerSec` (basis gap) | `snapshotAgeMs` (shape only) |
+|-----:|:--:|:--:|:--:|:--:|
+| | web · bevy | web (JSON) · bevy (postcard) | web (est.) · bevy (real wire) | web · bevy |
+| 2   | 0.028 · 0.019 ms | 13.8 · 2.1 KB/s | 18.7 · 2.7 KB/s | 0.5 · 115 ms |
+| 24  | 0.057 · 0.022 ms | 94.0 · 13.4 KB/s | 98.7 · 5.7 KB/s | 0.8 · 254 ms |
+| 100 | 0.124 · 0.025 ms | 370.7 · 53.5 KB/s | 375.5 · 13.6 KB/s | 1.3 · 262 ms |
+
+- **Sim cost (comparable):** both stacks simulate 100 bots in **well under 0.13 ms**
+  — i.e. **< 0.3 % of a 50 ms (20 Hz) tick budget**. Neither engine's simulation is
+  the bottleneck at this scale; Bevy's is flatter (0.019 → 0.025 ms) than web's
+  (0.028 → 0.124 ms), but both are noise against the tick budget.
+- **Bytes (gap):** the ~7× web/Bevy downlink ratio at 100 bots (370.7 vs 53.5 KB/s)
+  is **mostly the JSON-vs-postcard encoding plus replicon's changed-only delta**, NOT
+  "Bevy is 7× more network-efficient as netcode". What *is* comparable is the
+  **shape**: both grow ~linearly with entity count.
+
+**Axis 2 — latency tolerance** (`n2-latency-sweep`, tick 20, 24 bots, symmetric
+up/down delay). **This is the chapter's headline cross-engine finding.**
+
+| inj. delay (each way) / loss | web `rttP50` · bevy `rttP50` | web `snapshotAge` · bevy `snapshotAge` |
+|:--|:--:|:--:|
+| 0 ms / 0 %   | 21.6 · 58.4 ms | 1.1 · 229 ms |
+| 25 ms / 0 %  | 76.3 · 58.2 ms | 27.5 · 286 ms |
+| 50 ms / 0 %  | 123.1 · 58.3 ms | 52.4 · 282 ms |
+| 100 ms / 0 % | 215.5 · 58.7 ms | 102.1 · 339 ms |
+| 50 ms / 5 %  | 123.2 · 58.8 ms | 52.2 · 272 ms |
+| 50 ms / 10 % | 137.7 · 59.8 ms | 52.3 · 275 ms |
+
+- **Web RTT tracks the injected delay** (≈ base + 2×delay: 22 → 76 → 123 → 216 ms),
+  because the app-echo passes *through* the shim. **Bevy RTT stays pinned at the
+  transport floor (~58 ms) no matter the injected delay** — because injection sits
+  *above* netcode (GAP 2). A reader diffing the two RTT columns would wrongly conclude
+  "Bevy has rock-steady ~58 ms latency under any network condition." **False** — it's
+  a measurement-layer artifact, not a netcode property.
+- On Bevy the injected delay surfaces in **`snapshotAge` instead** (229 → 286 → 339 ms
+  as delay climbs; noisy because the pump quantizes it). On web it surfaces in **both**
+  RTT and `snapshotAge` (≈ the one-way down-delay: 1.1 → 27.5 → 52.4 → 102.1 ms). So the
+  honest cross-engine statement is: **latency is observable on different metrics per
+  stack; you must read `snapshotAge` to see impairment on the Bevy path.**
+
+**Axis 3 — bandwidth / freshness vs. tick rate** (`n2-tickrate-sweep`, 24 bots, clean).
+*Higher tick = fresher snapshots but more bytes — where's the knee?*
+
+| tick | web `bytesDown` · bevy `bytesDown` (encoding gap) | web `bytesUp` · bevy `bytesUp` (GAP 3) | web `snapshotAge` · bevy `snapshotAge` (shape) |
+|-----:|:--:|:--:|:--:|
+| 10 | 44.8 · 7.1 KB/s | 4.0 · 0.21 KB/s | 1.2 · 439 ms |
+| 15 | 70.4 · 9.8 KB/s | 4.1 · 0.29 KB/s | 0.9 · 310 ms |
+| 20 | 95.6 · 13.5 KB/s | 4.1 · 0.40 KB/s | 0.8 · 225 ms |
+| 30 | 152.4 · 20.2 KB/s | 4.1 · 0.59 KB/s | 0.9 · 139 ms |
+
+- **Downlink scales ~linearly with tick on both** (more snapshots/sec) — the
+  comparable *shape*; absolute bytes differ by encoding (§8.2a).
+- **Uplink (GAP 3):** web is **flat ~4 KB/s** (input fixed at 30 Hz); Bevy **scales
+  with tick** (0.21 → 0.59 KB/s, input in `FixedUpdate`). **Do not cross-compare the
+  uplink axis here.**
+- **Freshness:** Bevy's `snapshotAge` falls sharply with tick (439 → 139 ms) because
+  its floor is ~one tick period; web's is already at its ~1 ms in-process floor so it
+  barely moves. Both confirm the qualitative law — higher tick is fresher — but the
+  **optimum tick is machine- and stack-dependent** and these localhost numbers don't
+  pick a universal winner (§8.6).
+
+**Axis 4 — AI implementation speed (an OBSERVATION, not a verdict).** Building the web
+side went faster than the Bevy side, but this is **confounded by training-data
+volume**, exactly like chapter 1's "stale training data is the trap":
+
+- Colyseus + `colyseus.js` have years of examples in the training set; the idioms
+  came out roughly right on the first pass.
+- `bevy_replicon 0.40` / `bevy_replicon_renet 0.16` / `renet 2.0` on **Bevy 0.18** are
+  recent and sparsely represented; LLM training data is full of **older replicon/renet
+  APIs that do not compile** (message-vs-event APIs, `Channel` variants, resource-vs-
+  state types). Most Bevy time was spent re-verifying API names against docs.rs and
+  the version-matched example, not on netcode logic.
+- So **"web was faster to build with an AI agent" is an observation about library
+  maturity + training-data coverage, NOT evidence that replicon is a worse
+  abstraction.** Recorded honestly; not asserted as an engine verdict.
+
+### 8.5 Feel / friction (honest per-stack notes, same spirit as §3/§4)
+
+- **Web (Colyseus):** the room/transport/routing batteries are genuinely included;
+  the friction was *resisting* them — keeping our own snapshot frames instead of
+  letting `@colyseus/schema` auto-sync, so bytes stay measurable and the pattern
+  mirrors replicon. The app-level shim is honest but is **not** real UDP impairment
+  (no retransmit/congestion/HOL modelling).
+- **Bevy (replicon):** `set_if_neq` + changed-only replication is a clean, idiomatic
+  win (idle players cost nothing) and the type system caught real mistakes. The
+  friction is real and twofold: **(1)** version-pin landmines (0.41/0.17 jump to Bevy
+  0.19 — pins are EXACT `=`), and **(2)** renet ships no conditioner and takes a
+  concrete `UdpSocket`, so impairment had to go app-level and RTT can't see it (GAP 2).
+  The in-process manual pump quantizes RTT/`snapshotAge` floors to ~one tick — precise
+  on bytes and tick-cost, coarse on absolute latency.
+- **Net feel:** both reach a correct server-authoritative + interpolation pattern with
+  comparable per-tick sim cost. The web path is faster to stand up; the Bevy path
+  gives real wire-byte accounting and correctness-by-construction once the pins are
+  nailed. Neither "feels" better as netcode at this scale — the differences are in
+  *what you can measure* and *how much training data smooths the build*.
+
+### 8.6 What §8 does NOT establish
+
+Mirrors §7 — scope honesty is the point of the chapter.
+
+- **Single-machine / localhost only.** No WAN, no real RTT, no jitter, no real NAT/
+  hole-punching, no UDP transport loss (web loss is an app-level dropped frame; Bevy
+  loss is an app-level fold skip). Nothing here predicts behavior over the public
+  internet.
+- **No viral-scale or cloud-cost behavior.** 2 probe clients + ≤100 server bots on one
+  box says nothing about thousands of real connections, horizontal scaling, or hosting
+  $/CCU. "It's cheap at 100 bots locally" ≠ "it's cheap at scale".
+- **No cross-engine RTT *absolute*.** By construction the two stacks measure RTT at
+  different layers (GAP 2) and Bevy quantizes it; only `serverTickSimMs`,
+  `injectedDelay*`, `lossPct`, and the *shape* of `snapshotAge`/bytes are
+  cross-comparable.
+- **Tick-rate optimum is machine-dependent.** The sweep shows the *trend*, not a
+  universal best tick.
+- **No client-render-under-load cross-engine numbers** in this chapter — that is N1 /
+  chapter 1's axis (three vs. babylon render); §8's server-side numbers are identical
+  across the two web clients on purpose.
+- **No voice / audio chat.** Real-time audio is a **later chapter**, not measured here.
+- **Bytes are not wire-comparable across engines** (JSON vs postcard; estimate vs real
+  renet bytes) — see §8.2; only intra-stack scaling is meaningful.
