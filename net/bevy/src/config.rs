@@ -7,6 +7,15 @@
 /// and identical to the web server's `DEFAULT_TICK_RATE` for comparability.
 pub const TICK_RATE: f64 = 20.0;
 
+/// Supported tick band (Hz), mirrors the web server's `MIN/MAX_TICK_RATE`. The
+/// N2 tick-rate sweep (#147) clamps each stage into this band.
+pub const MIN_TICK_RATE: f64 = 10.0;
+pub const MAX_TICK_RATE: f64 = 30.0;
+
+/// Per-tick probability a bot picks a new random heading (mirrors the web
+/// `BOT_DIR_CHANGE_PROB`) — the N2 load-probe bot driver's only motion knob.
+pub const BOT_DIR_CHANGE_PROB: f64 = 0.05;
+
 /// Planar move speed applied to a unit move axis, world units/sec
 /// (mirrors `PLAYER_SPEED` on the web server).
 pub const PLAYER_SPEED: f32 = 5.0;

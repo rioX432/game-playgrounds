@@ -54,8 +54,9 @@ impl Plugin for NetClientSimPlugin {
 
 /// Send one thin input frame. `seq` is monotonic per client (a `Local`), echoing
 /// the web client's per-client sequence; replicon forwards the message to the
-/// server, which reads it as `FromClient<InputMessage>`.
-fn send_input(
+/// server, which reads it as `FromClient<InputMessage>`. Reused by the N2 probe
+/// client ([`crate::probe`]) so the probe's uplink is the exact same input frame.
+pub(crate) fn send_input(
     input: Res<ClientInput>,
     mut seq: Local<u32>,
     mut writer: MessageWriter<InputMessage>,

@@ -32,11 +32,17 @@ use bevy::state::app::StatesPlugin;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::RepliconRenetPlugins;
 
+pub mod bots;
 pub mod client;
+pub mod conditioner;
 pub mod config;
 pub mod interpolation;
+pub mod metrics;
+pub mod probe;
 pub mod protocol;
 pub mod render;
+pub mod rng;
+pub mod scenario;
 pub mod server;
 pub mod sim;
 pub mod transport;

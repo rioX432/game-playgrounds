@@ -32,6 +32,44 @@ not as a log of past PRs.
   flag-only updates (a stationary player toggling a boolean state). Use
   `Ref<A>` + `Ref<B>` and push on `a.is_changed() || b.is_changed()`.
 
+- **Systems in the SAME tuple/set that conflict on data are NOT ordered by
+  membership — add `.chain()` explicitly.** `(a, b).in_set(S)` only orders `S`
+  against neighbors; `a` and `b` run in an unspecified, build/thread-dependent order
+  if they conflict (e.g. `&mut`/`&` on one component). For a producer→consumer pair
+  whose order must be stable (seeded reproducibility), write
+  `(producer, consumer).chain().in_set(S)`.
+
+- **A deferred `commands.insert` is not visible to a later `query.get_mut` in the
+  SAME system run.** If one system processes a batch that may add a component to the
+  same entity twice in one pass, the second lookup still sees it absent and a second
+  `insert` overwrites the first (dropping its data). Stage the new value in a local
+  `HashMap<Entity, _>`, accumulate, then flush one `insert` per entity after the loop.
+
+## Measuring third-party-owned work honestly (Core Value #1)
+
+- **When a library OWNS a step you must measure (e.g. replicon owns serialize+send),
+  time its PUBLIC system SETS — don't fabricate a split.** replicon exposes
+  `ServerSystems::Send` (serialize) and `SendPackets` + renet `RenetSend` (flush) as
+  ordered sets; bracket each with marker systems (`.before`/`.after` the set) writing
+  `Instant`s into a resource. Document that the boundary is the library's, not a
+  hand-rolled one — an *honest* decomposition, not the same internal split the other
+  engine had.
+
+- **Read the resolved crate source before claiming an API exists.** renet 2.0 has NO
+  network conditioner and `renet_netcode` takes a concrete `UdpSocket` (not a trait)
+  — verified by extracting `~/.cargo/registry/cache/*/*.crate` and grepping (the
+  registry `src/` is only unpacked on build). A documented gap beats a fabricated
+  transport-level claim.
+
+- **A "bit-for-bit port" of an algorithm needs a golden vector from the SOURCE
+  language, not just a self-consistency test.** Run the original (e.g. `node -e`) to
+  capture 2–3 literal outputs for a known seed and assert against them; a
+  determinism test only proves the port is consistent with itself.
+
+- **A measurement harness that proceeds on a failed precondition emits misleading
+  data, not an error.** If a load probe's clients don't all connect, FAIL the run
+  rather than writing `clientCount=0` near-zero lines.
+
 ## Verifying third-party APIs (No-Guessing rule)
 
 - **LLM training data carries stale crate APIs.** For replicon/renet specifically,

@@ -61,6 +61,13 @@ All measurement output is **JSON Lines**: one `MetricsSample`
   asymmetrically, so an asymmetric run never under-reports its impairment.
 - `serverTickSendMs` is only meaningful when send is **not** deferred by an injected
   send-side delay (see `net/server/CLAUDE.md`).
+- The **shape** is identical across engines, but some field VALUES are measured
+  differently where a stack cannot mirror the other (Core Value #1 — documented, not
+  faked). For Bevy specifically: `bytesUp/DownPerSec` are app payload in **postcard**
+  (vs web JSON), `transportBytesPerSec` is **real renet wire bytes** (vs a web
+  estimate), and `rttP50/P95Ms` is **renet transport RTT** that does NOT include
+  app-injected delay. Full table in `net/bevy/CLAUDE.md` → "Honest-parity". Read it
+  before cross-engine diffing (#148).
 
 ## Subprojects
 
@@ -70,7 +77,7 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 | `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141); N2 load-probe scenarios — sync-count ramp + bidirectional shim sweep + tick-rate sweep (#144) |
 | `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142) |
 | `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143) |
-| `bevy/` | Rust + Bevy `0.18.1` + `bevy_replicon 0.40.4` / `bevy_replicon_renet 0.16.0` native authority+client | dependency spike — `cargo check` green + minimal plugin skeleton (#145); N1 server-authoritative replication + client interpolation, render/net-sim split, real-UDP loopback test (#146) |
+| `bevy/` | Rust + Bevy `0.18.1` + `bevy_replicon 0.40.4` / `bevy_replicon_renet 0.16.0` native authority+client | dependency spike — `cargo check` green + minimal plugin skeleton (#145); N1 server-authoritative replication + client interpolation, render/net-sim split, real-UDP loopback test (#146); N2 load probe — bot ramp + app-level bidirectional conditioner + `metrics.jsonl` in the #140 schema, with documented honest-parity gaps vs the web probe (#147) |
 
 > Build: `cd net/protocol && npm install && npm run typecheck` (must stay green).
 > Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
