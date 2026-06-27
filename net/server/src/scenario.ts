@@ -1,23 +1,46 @@
-// Headless measurement scenario runner. Boots the room IN-PROCESS, connects N
-// probe clients + M server bots under configurable impairment, runs for a fixed
-// duration, and appends MetricsSample lines to metrics.jsonl. No rendering.
+// Headless N2 load-probe CLI (#144). Selects a named scenario, runs it
+// in-process against the real Colyseus room, and appends one MetricsSample line
+// per stage to metrics.jsonl. No rendering.
 //
-// Config via env vars (all optional):
-//   SCENARIO ENGINE SEED TICK BOTS CLIENTS INPUT_HZ DURATION_MS FLUSH_MS OUT
-//   DELAY_UP_MS DELAY_DOWN_MS LOSS_UP_PCT LOSS_DOWN_PCT
-//
-//   BOTS supports a ramp, e.g. BOTS="2,24,100" — each stage runs DURATION_MS.
+// Env (all optional):
+//   SCENARIO  one of: n2-stress-ramp | n2-latency-sweep | n2-tickrate-sweep | adhoc
+//             (default n2-stress-ramp)
+//   ENGINE    sample label: three | babylon | bevy (default three; render is a
+//             dependent variable, so this only labels the line)
+//   SEED      RNG seed for reproducible bot motion (default 1)
+//   OUT       metrics.jsonl path (default metrics.jsonl)
+//   WARMUP_MS / MEASURE_MS   per-stage settle / measured window (ms)
+//   CLIENTS   probe-client count (RTT/snapshot-age sources)
+//   TICK      tick rate, Hz (ramp / latency / adhoc; ignored by tickrate-sweep)
+//   BOTS      bot ramp for n2-stress-ramp / adhoc, e.g. BOTS="2,24,100"
+//   BOT_COUNT fixed bot count for the sweep scenarios
+//   DELAY_UP_MS / DELAY_DOWN_MS / LOSS_UP_PCT / LOSS_DOWN_PCT   adhoc shim
+//   TICKS     tick sweep, e.g. TICKS="10,20,30" (n2-tickrate-sweep)
 
-import { boot } from '@colyseus/testing';
 import { ENGINES, type Engine } from 'net-protocol';
-import { appConfig } from './app.js';
-import { ROOM_NAME } from './config.js';
-import { ProbeClient, type ClientRoomLike } from './client/probeClient.js';
-import { GameRoom, type GameRoomOptions } from './rooms/GameRoom.js';
+import { SCENARIOS, scenarioIds, type ScenarioOpts } from './scenarios/defs.js';
+import { runScenario } from './scenarios/runner.js';
 
-const num = (key: string, def: number): number => {
+// Parse a numeric env knob. An empty/whitespace value (`Number('')` is 0) or a
+// value below `min` is treated as UNSET so it falls back to the scenario default
+// — a silently-accepted 0 ms measure window or negative count would emit a
+// plausible-looking but wrong metrics line (Core Value #1: honest measurement).
+const numEnv = (key: string, min = -Infinity): number | undefined => {
   const v = process.env[key];
-  return v === undefined ? def : Number(v);
+  if (v === undefined || v.trim() === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= min ? n : undefined;
+};
+
+// Parse a comma-separated positive-number ramp (bot/tick counts must be > 0).
+const listEnv = (key: string): number[] | undefined => {
+  const v = process.env[key];
+  if (v === undefined) return undefined;
+  const xs = v
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return xs.length > 0 ? xs : undefined;
 };
 
 const parseEngine = (v: string | undefined): Engine =>
@@ -25,67 +48,56 @@ const parseEngine = (v: string | undefined): Engine =>
     ? (v as Engine)
     : 'three';
 
-const parseRamp = (v: string | undefined, def: number): number[] =>
-  v === undefined
-    ? [def]
-    : v
-        .split(',')
-        .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n));
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 async function main(): Promise<void> {
-  const clientCount = num('CLIENTS', 2);
-  const tickRate = num('TICK', 20);
-  const durationMs = num('DURATION_MS', 3000);
-  const inputHz = num('INPUT_HZ', 30);
-  const seed = num('SEED', 1);
-  const metricsPath = process.env.OUT ?? 'metrics.jsonl';
-  const botStages = parseRamp(process.env.BOTS, 8);
+  const id = process.env.SCENARIO ?? 'n2-stress-ramp';
+  const builder = SCENARIOS[id];
+  if (!builder) {
+    // eslint-disable-next-line no-console
+    console.error(`unknown SCENARIO "${id}". Known: ${scenarioIds().join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
 
-  const options: GameRoomOptions = {
-    scenario: process.env.SCENARIO ?? 'adhoc',
-    engine: parseEngine(process.env.ENGINE),
-    seed,
-    tickRate,
-    botCount: botStages[0],
-    metricsPath,
-    flushIntervalMs: num('FLUSH_MS', 1000),
+  const opts: ScenarioOpts = {
+    clientCount: numEnv('CLIENTS', 1),
+    tickRate: numEnv('TICK', 1),
+    botCount: numEnv('BOT_COUNT', 0),
+    botStages: listEnv('BOTS'),
+    ticks: listEnv('TICKS'),
+    warmupMs: numEnv('WARMUP_MS', 0),
+    measureMs: numEnv('MEASURE_MS', 1),
     shim: {
-      up: { delayMs: num('DELAY_UP_MS', 0), lossPct: num('LOSS_UP_PCT', 0) },
-      down: { delayMs: num('DELAY_DOWN_MS', 0), lossPct: num('LOSS_DOWN_PCT', 0) },
+      up: { delayMs: numEnv('DELAY_UP_MS', 0) ?? 0, lossPct: numEnv('LOSS_UP_PCT', 0) ?? 0 },
+      down: { delayMs: numEnv('DELAY_DOWN_MS', 0) ?? 0, lossPct: numEnv('LOSS_DOWN_PCT', 0) ?? 0 },
     },
   };
 
-  const colyseus = await boot(appConfig);
-  const room = await colyseus.createRoom(ROOM_NAME, options);
-  const gameRoom = room as unknown as GameRoom;
+  const def = builder(opts);
+  const seed = numEnv('SEED') ?? 1;
+  const engine = parseEngine(process.env.ENGINE);
+  const metricsPath = process.env.OUT ?? 'metrics.jsonl';
 
-  const probes: ProbeClient[] = [];
-  const clientRooms: ClientRoomLike[] = [];
-  for (let i = 0; i < clientCount; i++) {
-    const cr = (await colyseus.connectTo(room)) as unknown as ClientRoomLike;
-    const probe = new ProbeClient(cr, { inputHz });
-    probe.start();
-    probes.push(probe);
-    clientRooms.push(cr);
-  }
+  // eslint-disable-next-line no-console
+  console.log(`scenario "${def.id}" — ${def.stages.length} stage(s), seed ${seed}, engine ${engine}`);
+  // eslint-disable-next-line no-console
+  console.log(`note: ${def.notes}`);
 
-  for (const bots of botStages) {
-    gameRoom.setBotCount(bots);
-    // eslint-disable-next-line no-console
-    console.log(`stage: ${bots} bots, ${clientCount} clients @ ${tickRate}Hz`);
-    await sleep(durationMs);
-  }
+  await runScenario(def, {
+    seed,
+    engine,
+    metricsPath,
+    onStage: (sample, _stage, i) => {
+      // eslint-disable-next-line no-console
+      console.log(
+        `stage ${i}: bots=${sample.botCount} clients=${sample.clientCount} ` +
+          `tick=${sample.tickRate} down=${sample.bytesDownPerSec.toFixed(0)}B/s ` +
+          `rttP50=${sample.rttP50Ms.toFixed(1)}ms snapAge=${sample.snapshotAgeMs.toFixed(1)}ms ` +
+          `sim=${sample.serverTickSimMs.toFixed(2)}ms ser=${sample.serverTickSerializeMs.toFixed(2)}ms ` +
+          `send=${sample.serverTickSendMs.toFixed(2)}ms loss=${sample.lossPct}%`,
+      );
+    },
+  });
 
-  // Flush the final window WHILE clients are still connected so clientCount and
-  // the windowed byte counters describe the same moment.
-  gameRoom.forceFlushMetrics();
-  for (const probe of probes) probe.stop();
-  for (const cr of clientRooms) await cr.leave();
-  await colyseus.shutdown();
   // eslint-disable-next-line no-console
   console.log(`scenario complete -> ${metricsPath}`);
 }

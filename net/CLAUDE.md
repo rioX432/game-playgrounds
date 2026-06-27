@@ -65,7 +65,7 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 | Dir | Stack | Status |
 |-----|-------|--------|
 | `protocol/` | TypeScript shared types (measurement schema + wire DTOs) | locked schema (#140) + thin DTOs (#141) |
-| `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141) |
+| `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141); N2 load-probe scenarios — sync-count ramp + bidirectional shim sweep + tick-rate sweep (#144) |
 | `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142) |
 | `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143) |
 

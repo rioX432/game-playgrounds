@@ -11,6 +11,7 @@ import { ClientState, Room } from '@colyseus/core';
 import type { Client } from '@colyseus/core';
 import {
   type Engine,
+  type MetricsSample,
   MSG,
   type PlayerInput,
   type WelcomeMessage,
@@ -184,9 +185,23 @@ export class GameRoom extends Room {
     this.bots.setCount(n);
   }
 
-  /** Force a metrics flush now (deterministic tests / scenario boundaries). */
-  forceFlushMetrics(): void {
-    this.flush();
+  /**
+   * Force a metrics flush now (deterministic tests / scenario boundaries) and
+   * return the emitted sample. Drains+resets the collector window exactly like
+   * the periodic flusher, and appends a line when a metricsPath is configured.
+   */
+  forceFlushMetrics(): MetricsSample {
+    return this.flush();
+  }
+
+  /**
+   * Discard the current measurement window without emitting a line. The
+   * scenario runner calls this AFTER a per-stage warmup so the next sample's
+   * windowed averages are not polluted by the previous stage's bot population
+   * or by the partial connect/ramp window (#144).
+   */
+  resetMetricsWindow(): void {
+    this.collector.resetWindow();
   }
 
   private tick(): void {
@@ -229,14 +244,20 @@ export class GameRoom extends Room {
     }
   }
 
-  private flush(): void {
-    if (!this.writer) return;
+  /**
+   * Build one MetricsSample from the current window (draining+resetting the
+   * collector) and append it to metrics.jsonl when a writer is configured.
+   * Returns the built sample so the scenario runner can collect per-stage
+   * results in-process without re-reading the file.
+   */
+  private flush(): MetricsSample {
     const sample = this.collector.sample({
       ...this.sampleBase,
       clientCount: this.connectedCount,
       botCount: this.activeBotCount,
     });
-    this.writer.write(sample);
+    if (this.writer) this.writer.write(sample);
+    return sample;
   }
 }
 
