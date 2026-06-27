@@ -1,0 +1,31 @@
+[package]
+name = "net-bevy"
+version = "0.1.0"
+edition = "2021"
+description = "net/ chapter — Bevy 0.18 native server-authoritative replication SPIKE (dependency-resolution skeleton)"
+
+[dependencies]
+# --- EXACT pins (no caret) — this is a dependency SPIKE (issue #145). ---
+# The whole point is to NOT let `latest`/caret silently pull a 0.19-era bump.
+# Each pin's Bevy-0.18 compatibility was verified against the crates.io sparse
+# index (the published `bevy` dependency range), NOT assumed. See CLAUDE.md.
+#
+#   bevy 0.18.1               — latest 0.18 patch (same engine pin as ../../bevy).
+#   bevy_replicon 0.40.4      — declares `bevy = "^0.18"`. 0.41.0 jumps to ^0.19,
+#                               so an exact pin is required to stay on 0.18.
+#   bevy_replicon_renet 0.16.0 — declares `bevy = "^0.18.0"`,
+#                               `bevy_replicon = "^0.40.0"`, `bevy_renet = "^4.0"`.
+#                               0.17.0 jumps to bevy ^0.19.
+bevy = "=0.18.1"
+bevy_replicon = "=0.40.4"
+bevy_replicon_renet = "=0.16.0"
+
+# --- Fast-iteration compile profiles (mirrors ../../bevy) ---
+# Build OUR crate with light optimization (fast to compile), but build all
+# DEPENDENCIES (Bevy, replicon, renet) at opt-level 3. No external tooling
+# required. For dynamic linking use `cargo check --features bevy/dynamic_linking`.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

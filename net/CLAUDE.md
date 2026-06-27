@@ -25,11 +25,13 @@ characteristics**, not reproducing any specific game.
 
 - **Bevy `0.18`** — same pin as `../bevy`. LLM training data is full of older Bevy
   APIs that will not compile; use 0.18 only.
-- **bevy_replicon — 0.40 line (TARGET).** replicon tracks Bevy releases closely;
-  the exact 0.18-compatible release MUST be confirmed against crates.io at the time
-  the Bevy server issue is implemented (do not assume — verify the published
-  `bevy` dependency range of the chosen replicon version). This file records the
-  intended pin; the server crate's `Cargo.toml` is the binding source of truth.
+- **bevy_replicon — 0.40 line (CONFIRMED, #145).** The dependency spike verified the
+  exact 0.18-compatible pins against the crates.io sparse index (the published `bevy`
+  dependency range each version declares): `bevy_replicon =0.40.4` (`bevy ^0.18`) +
+  `bevy_replicon_renet =0.16.0` (`bevy ^0.18.0`, `bevy_renet ^4.0`). `bevy_replicon`
+  0.41 / `bevy_replicon_renet` 0.17 both jump to Bevy 0.19, so the pins are EXACT `=`
+  (no caret). `net/bevy/Cargo.toml` + `net/bevy/CLAUDE.md` are the binding source of
+  truth (with crates.io evidence); re-verify the ranges on any Bevy bump.
 
 ### Colyseus piggyback policy
 
@@ -68,11 +70,13 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 | `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141); N2 load-probe scenarios — sync-count ramp + bidirectional shim sweep + tick-rate sweep (#144) |
 | `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142) |
 | `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143) |
+| `bevy/` | Rust + Bevy `0.18.1` + `bevy_replicon 0.40.4` / `bevy_replicon_renet 0.16.0` native authority+client | dependency spike — `cargo check` green + minimal plugin skeleton (#145); server-authoritative + client-interp logic (#146) |
 
 > Build: `cd net/protocol && npm install && npm run typecheck` (must stay green).
 > Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
 > Build: `cd net/web-three && npm install && npm run build && npm test` (must stay green).
 > Build: `cd net/web-babylon && npm install && npm run build && npm test` (must stay green).
+> Build: `cd net/bevy && cargo check` (must stay green; Bevy 0.18 ONLY — see `net/bevy/CLAUDE.md`).
 > This chapter has its **own** web clients (`web-three`, `web-babylon`) and does
 > **not** touch the `../three`, `../babylon`, or `../bevy` builds. The two web
 > clients piggyback the **same** server + room ("game"); they differ ONLY in the
