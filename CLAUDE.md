@@ -44,6 +44,10 @@ cd bevy && cargo run --features bevy/dynamic_linking   # run with fast increment
 
 - GUI / visual editor; bespoke hand-made art (primitives / procedural / CC0 only); mobile build.
 - (Networking was previously out of scope; as of the `net/` chapter it is **in scope** — see above.)
+- Real-scale / viral-load networking infrastructure: multi-machine load, cloud-cost
+  modeling, autoscaling. The `net/` chapter measures patterns + characteristics on a
+  single machine (localhost); production-scale cost/scale behavior is an ops concern,
+  not a mechanic-reproduction one — it fails the Core Value one-step test (see `COMPARISON.md` §8.6).
 
 ## Issues & dev-all
 
