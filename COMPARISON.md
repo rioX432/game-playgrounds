@@ -264,7 +264,8 @@ fix (`process.resourcesPath`).
 
 - **No load/perf benchmark** (§5) — light scenes only.
 - **No packaged build** — Steam path is researched, not done.
-- **No networking/multiplayer** — out of scope by design (a separate spike).
+- **No networking/multiplayer** — *was* out of scope here; now its own chapter (§8,
+  `net/`). This §7 still scopes only the single-machine comparison above.
 - **No hand-made art** — primitives/procedural only, so this says nothing about
   asset pipelines or shader authoring.
 - **Feel is single-evaluator and qualitative** — recorded honestly per sample, but
@@ -286,3 +287,42 @@ For light, single-machine, PC/Steam-first mechanics:
 
 The next high-value step is a **stress/perf sample** across all three to turn §5
 from "fine, probably" into numbers.
+
+---
+
+## 8. Networking (chapter 2) — skeleton
+
+> Status: **skeleton only.** This section locks the *measurement axes* up front; the
+> numbers land as the `net/` samples are built. The measurement schema is fixed in
+> `net/protocol/src/metrics.ts` (one `MetricsSample` == one `metrics.jsonl` line);
+> chapter rules live in `net/CLAUDE.md`. Web side piggybacks on **Colyseus**, native
+> side on **Bevy 0.18 + bevy_replicon**.
+
+### 8.1 Scope & pattern
+
+- Server-authoritative simulation + client-side interpolation.
+- Same engines as chapter 1, compared on netcode behavior — not on a specific game.
+
+### 8.2 Measurement axes
+
+- **Bandwidth** — app payload up/down (`bytesUpPerSec`, `bytesDownPerSec`) vs.
+  estimated on-the-wire (`transportBytesPerSec`).
+- **Latency** — `rttP50Ms` / `rttP95Ms` (client monotonic ts + echoed seq).
+- **Snapshot freshness** — `snapshotAgeMs` (interpolation-buffer depth).
+- **Server tick budget** — `serverTickSimMs` / `serverTickSerializeMs` /
+  `serverTickSendMs`.
+- **Injected network conditions** — `injectedDelayCtoSMs`, `injectedDelayStoCMs`,
+  `lossPct`.
+- **Scale knobs** — `tickRate`, `clientCount`, `botCount`, `seed`, `scenario`.
+
+### 8.3 Per-engine implementation notes
+
+_TBD — filled per sample._
+
+### 8.4 Numbers
+
+_TBD — populated from `metrics.jsonl` runs._
+
+### 8.5 Feel / friction
+
+_TBD — honest per-engine notes, same spirit as §3/§4._
