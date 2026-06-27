@@ -30,9 +30,20 @@ cd bevy && cargo run --features bevy/dynamic_linking   # run with fast increment
 2. **Idiomatic per engine, minimal dependencies.**
 3. **AI-Agent Developable** — code-first, no GUI editor, every sample self-contained and build-green.
 
+## Chapters
+
+1. **Single-machine mechanics** (`three/`, `babylon/`, `bevy/`) — done; written up in `COMPARISON.md`.
+2. **Networking / multiplayer** (`net/`) — the current chapter. Goal: multiplayer
+   **implementation patterns + performance characteristics** across the same engines,
+   not reproducing a specific game. Server-authoritative + client-interpolation, with a
+   fixed `metrics.jsonl` measurement schema locked before any sample is built. Web side
+   piggybacks on **Colyseus**; native side uses **Bevy 0.18 + bevy_replicon**. See
+   `net/CLAUDE.md` and `COMPARISON.md §8`.
+
 ## Won't Do
 
-- GUI / visual editor; bespoke hand-made art (primitives / procedural / CC0 only); networking / multiplayer in this playground; mobile build.
+- GUI / visual editor; bespoke hand-made art (primitives / procedural / CC0 only); mobile build.
+- (Networking was previously out of scope; as of the `net/` chapter it is **in scope** — see above.)
 
 ## Issues & dev-all
 
