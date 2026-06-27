@@ -14,6 +14,7 @@ version-compatibility landmine FIRST, before any server/client logic (#146).
 cargo check                                  # the deliverable — must stay GREEN
 cargo check --features bevy/dynamic_linking  # faster incremental (dylib-linked Bevy)
 cargo test                                   # headless: app builds + one tick, no window
+cargo clippy                                 # lints
 ```
 
 > First compile builds all of Bevy + replicon + renet and is SLOW. To avoid a cold
@@ -31,7 +32,7 @@ Bevy-0.18-compatible. Evidence from the crates.io sparse index (the published
 
 | Crate | Pin | Declared `bevy` range | Next version bumps to |
 |-------|-----|-----------------------|-----------------------|
-| `bevy` | `=0.18.1` | — (latest 0.18 patch; same engine pin as `../../bevy`) | 0.19 |
+| `bevy` | `=0.18.1` | — (latest 0.18 patch; same resolved version as `../../bevy`, which uses caret `0.18`) | 0.19 |
 | `bevy_replicon` | `=0.40.4` | `^0.18` | `0.41.0 → ^0.19` |
 | `bevy_replicon_renet` | `=0.16.0` | `^0.18.0` (also `bevy_replicon = ^0.40.0`, `bevy_renet = ^4.0`) | `0.17.0 → bevy ^0.19` |
 

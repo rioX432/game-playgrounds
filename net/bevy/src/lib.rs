@@ -51,5 +51,6 @@ mod tests {
     fn app_builds_and_ticks_with_replicon_renet() {
         let mut app = build_app();
         app.update();
+        // assert: no panic == plugin groups construct and tick cleanly on Bevy 0.18.
     }
 }
