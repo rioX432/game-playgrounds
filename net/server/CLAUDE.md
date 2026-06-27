@@ -14,10 +14,32 @@ npm run scenario    # headless measurement run -> metrics.jsonl (env-configured)
 npm run dev:server  # standalone Colyseus + WS transport on PORT (default 2567)
 ```
 
-Scenario env knobs (all optional):
-`SCENARIO ENGINE SEED TICK BOTS CLIENTS INPUT_HZ DURATION_MS FLUSH_MS OUT
-DELAY_UP_MS DELAY_DOWN_MS LOSS_UP_PCT LOSS_DOWN_PCT`. `BOTS` accepts a ramp,
-e.g. `BOTS="2,24,100"` (each stage runs for `DURATION_MS`).
+### N2 load probe (#144)
+
+`npm run scenario` runs a **named** scenario (`src/scenarios/`), emitting ONE
+`MetricsSample` line per stage to `metrics.jsonl`. Pick with `SCENARIO`:
+
+| `SCENARIO` | What it sweeps | Rooms |
+|------------|----------------|-------|
+| `n2-stress-ramp` (default) | sync-entity count `BOTS=2,8,16,24,50,100` at fixed tick / zero impairment | one room, live bot ramp |
+| `n2-tickrate-sweep` | `TICKS=10,15,20,30` at fixed `BOT_COUNT` (optimum search) | fresh room per tick |
+| `n2-latency-sweep` | bidirectional delay+loss points at fixed `BOT_COUNT` | fresh room per point |
+| `adhoc` | single-shim bot ramp from `DELAY_*` / `LOSS_*` env (the #141 run) | one room, live bot ramp |
+
+Env knobs (all optional): `SCENARIO ENGINE SEED OUT WARMUP_MS MEASURE_MS
+CLIENTS TICK BOTS BOT_COUNT TICKS DELAY_UP_MS DELAY_DOWN_MS LOSS_UP_PCT
+LOSS_DOWN_PCT`. Each stage settles for `WARMUP_MS` (window discarded), then the
+`MEASURE_MS` window becomes the sample. `BOTS`/`TICKS` accept comma ramps. The
+in-process runner (`runScenario`) is also called directly by the Vitest tests.
+
+Example:
+`SCENARIO=n2-stress-ramp BOTS=2,24,100 CLIENTS=2 WARMUP_MS=300 MEASURE_MS=700 OUT=metrics.jsonl npm run scenario`
+
+Room-boot strategy: `tickRate` and `shim` are fixed at `onCreate`, so the runner
+boots a fresh room whenever those (or `clientCount`) change and live-ramps
+`botCount` within a segment. A finished room is drained to zero bots (not
+force-disconnected — that resets the in-process test client's keep-alive socket)
+and idles until the scenario's single shutdown.
 
 ## Version pins (verified at impl time — do NOT float)
 
