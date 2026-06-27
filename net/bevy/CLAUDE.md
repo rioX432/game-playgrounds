@@ -1,10 +1,12 @@
-# net/bevy — Bevy 0.18 native replication (N1)
+# net/bevy — Bevy 0.18 native replication (N1 + N2 probe)
 
 The native authority + client side of the net/ chapter, in **Bevy 0.18 + bevy_replicon**.
 This subdir started as the **dependency spike** (#145: step on the version-compat
-landmine first) and now carries the **N1 sample** (#146): a server-authoritative
+landmine first), carries the **N1 sample** (#146): a server-authoritative
 replication + client-interpolation playground that mirrors the web N1
-(`net/web-three` + `net/server`) in Rust/ECS.
+(`net/web-three` + `net/server`) in Rust/ECS, and now the **N2 load probe** (#147):
+the Rust counterpart of the web N2 probe (#144) that emits the SAME #140
+`metrics.jsonl` schema so #148 can diff Web vs Bevy apples-to-apples.
 
 > Separate Cargo project from `../../bevy`. **Bevy 0.18 ONLY** — LLM training data
 > is full of older Bevy APIs that will not compile. Use 0.18 idioms only;
@@ -20,7 +22,99 @@ cargo test --test net_loopback               # real 127.0.0.1-UDP server↔clien
 cargo clippy --all-targets                   # lints (kept clean)
 cargo run -- --server                        # headless authority on 127.0.0.1:5010
 cargo run -- --client [host:port]            # windowed client (DefaultPlugins)
+cargo run -- --scenario                      # headless N2 load probe -> metrics.jsonl
+cargo test --test probe_scenario             # real-UDP N2 probe (tiny shrunk run)
 ```
+
+## N2 load probe (#147)
+
+The Rust counterpart of the web N2 probe (#144). It boots a headless
+authoritative server + N real-UDP probe clients **in one process**, ramps
+server-internal **bots** to scale the synchronized-entity count, injects
+**app-level** bidirectional impairment, and emits one `MetricsSample` line per
+scenario stage to `metrics.jsonl` — the SAME #140 schema the web probe writes.
+
+| `SCENARIO` | sweeps | boots |
+|------------|--------|-------|
+| `n2-stress-ramp` (default) | sync count `BOTS=2,8,16,24,50,100` @ fixed tick / clean | one app, live bot ramp |
+| `n2-tickrate-sweep` | `TICKS=10,15,20,30` @ fixed `BOT_COUNT` | fresh app per tick |
+| `n2-latency-sweep` | bidirectional delay+loss points @ fixed `BOT_COUNT` | fresh app per point |
+| `adhoc` | single-shim bot ramp from `DELAY_*` / `LOSS_*` | one app, live bot ramp |
+
+Env knobs (all optional, mirror the web `npm run scenario`): `SCENARIO SEED OUT
+WARMUP_MS MEASURE_MS CLIENTS TICK BOTS BOT_COUNT TICKS DELAY_UP_MS DELAY_DOWN_MS
+LOSS_UP_PCT LOSS_DOWN_PCT`. `BOTS`/`TICKS` accept comma ramps. Example:
+`SCENARIO=n2-stress-ramp BOTS=2,24,100 CLIENTS=2 WARMUP_MS=300 MEASURE_MS=800 OUT=metrics.jsonl cargo run -- --scenario`
+
+### Module map (additive to N1 — N1 is untouched)
+
+| Module | Role |
+|--------|------|
+| `metrics` | `MetricsSample` (serde→IDENTICAL #140 camelCase JSON) + windowed `MetricsAccumulator` + JSONL writer. A test pins the 18-field set. |
+| `rng` | mulberry32 ported from the web `rng.ts` — same seed ⇒ same bot-motion draws. |
+| `conditioner` | app-level delay/loss link (the `TransportShim` mirror). |
+| `bots` | server-internal **replicated** bot entities, seeded random walk (`BotDriver` mirror). |
+| `scenario` | `Stage`/`ScenarioDef` + named builders + `plan_segments` (the `defs.ts`/runner mirror). |
+| `probe` | `ProbeServerPlugin` (timing + bytes + stats + conditioned uplink), `ProbeClientPlugin` (conditioned downlink), and `run_scenario`. |
+
+### Honest-parity — what is measured, and where Bevy/replicon CANNOT mirror the web
+
+Core Value #1 is non-negotiable: every metric is **measured**, never faked; a
+field that cannot be faithfully measured is **documented**, not stuffed with a
+misleading number. Verified against crate source (`bevy_replicon 0.40.4`,
+`renet 2.0.0` — extracted & read, not guessed).
+
+| metric | Bevy source | parity verdict |
+|--------|-------------|----------------|
+| `serverTickSimMs` | timed `FixedUpdate` sim set (bot drive + integrate) | **TRUE parity** |
+| `serverTickSerializeMs` | timed replicon `ServerSystems::Send` set (build + postcard into `ServerMessages`) | **honest split** — not the web's `buildSnapshot` boundary, but a real replicon-set boundary |
+| `serverTickSendMs` | timed `ServerSystems::SendPackets` + renet `RenetSend` socket flush | **honest split** (same caveat) |
+| `bytesUp/DownPerSec` | app payload sized with **postcard** (replicon's native encoder), full snapshot/tick/client | **parity of definition**; encoding differs (postcard binary vs web JSON) ⇒ absolute bytes are not comparable, the **down/serialize scaling** is. CAVEAT: uplink rate differs (GAP 3) |
+| `transportBytesPerSec` | renet `ConnectedClientStats.{sent,received}_bps` (`RenetServer::network_info`) | **better than web** — real wire bytes, not "payload + constant" estimate. renet-packet bytes (incl. renet framing; excl. netcode tag + UDP/IP headers), over renet's 6 s window |
+| `rttP50/P95Ms` | renet transport RTT (`ConnectedClientStats.rtt`) | **DOCUMENTED GAP** (two parts, below) |
+| `snapshotAgeMs` | probe-client interp-buffer depth (`now − latest sample time`) | **TRUE parity** |
+| `injectedDelay*`, `lossPct` | scenario knobs; `lossPct = max(up,down)` | **TRUE parity** |
+
+**GAP 1 — latency/loss injection is app-level, not transport-level.** renet 2.0
+ships **no network conditioner** (it only *reports* loss/rtt), and `renet_netcode`
+2.0 takes a concrete `std::net::UdpSocket` (not a trait), so a conditioning socket
+can't be slotted under the transport and a UDP relay would fight netcode address
+validation. So — exactly like the web shim (also app-level over Colyseus's reliable
+channel) — impairment is injected in app code: **uplink** conditions the server
+folding a received `InputMessage`; **downlink** conditions the probe client folding
+a replicated mutation into its interp buffer (receive-side, because replicon owns
+send). Observable effect (staler `snapshotAge`, dropped frames) matches the web
+shim; what differs is GAP 2.
+
+**GAP 2 — RTT does not reflect app-injected delay.** Because injection sits ABOVE
+netcode, renet's transport RTT measures only the real localhost link, so under a
+latency sweep `rttP50/P95Ms` stay near the floor; the injected delay surfaces in
+`snapshotAge` (down) instead. The web app-echo RTT, by contrast, passes through its
+shim. This is a real cross-engine difference (a §8 finding), not a bug.
+
+**GAP 3 — uplink input rate is the tick rate, not a fixed 30 Hz.** The web probe
+sends input at a wall-clock `PROBE_INPUT_HZ = 30` regardless of tick; the Bevy probe
+sends in `FixedUpdate`, i.e. at the server tick rate (10–30 Hz). So under
+`n2-tickrate-sweep`, `bytesUpPerSec` scales with tick on Bevy but is flat on Web —
+do NOT cross-compare the uplink-bytes axis under a tick sweep. The downlink, server-
+tick-cost, and transport axes (the probe's primary signals) are unaffected.
+
+**Harness caveat — in-process manual pump.** The runner pumps `update()` at the
+tick cadence with a real sleep per step (the loopback-test pattern), so renet
+**RTT and `snapshotAge` absolute floors are quantized to ≈ one tick period** (e.g.
+~50 ms at 20 Hz) — RTT at loopback is therefore a coarse proxy, not sub-ms. The
+**bytes** and **server-tick-cost** axes are precise; treat RTT cross-engine
+absolutes as directional. (`serverTickSendMs` remains only meaningful at zero
+down-delay, carried over from #144 — though here down-delay is a client-side fold
+deferral, so it doesn't perturb the server send path the way the web shim did.)
+
+### Headless testability
+
+`tests/probe_scenario.rs` runs a SHRUNK scenario over real localhost UDP (tiny
+windows) and asserts every emitted line is a schema-valid #140 sample with
+`engine="bevy"`, in-memory AND on disk. Like `net_loopback.rs` it loads only the
+headless plugin set (never `NetRenderPlugin`) and drives `update()` via a bounded
+pump loop (`finish()`+`cleanup()` first, so replicon sizes its receive channels).
 
 ## N1 architecture (render / net-sim separation)
 

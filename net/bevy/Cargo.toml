@@ -26,6 +26,15 @@ bevy_replicon_renet = "=0.16.0"
 # the same major already in replicon's tree.
 serde = { version = "1", features = ["derive"] }
 
+# N2 load probe (#147). `postcard` is replicon's OWN wire serializer (already in
+# the resolved tree via bevy_replicon) — used to size app-payload bytes in the
+# SAME encoding replicon ships, so `bytesUp/DownPerSec` reflect Bevy's native
+# binary serialization (contrast the web probe's JSON `JSON.stringify` bytes).
+# `serde_json` writes metrics.jsonl lines in the #140 schema (camelCase) so a Bevy
+# line is shape-identical to a web line for the #148 cross-engine diff.
+postcard = { version = "1", features = ["use-std"] }
+serde_json = "1"
+
 # --- Fast-iteration compile profiles (mirrors ../../bevy) ---
 # Build OUR crate with light optimization (fast to compile), but build all
 # DEPENDENCIES (Bevy, replicon, renet) at opt-level 3. No external tooling

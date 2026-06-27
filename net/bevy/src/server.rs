@@ -32,6 +32,30 @@ pub struct LatestInput {
     last_seq: u32,
 }
 
+impl LatestInput {
+    /// Fold one client input with the monotonic `seq` guard. The raw axis is
+    /// sanitized to `[-1, 1]` here, so every caller (the N1 receive system AND the
+    /// probe's conditioned receive in [`crate::probe`]) shares the exact same
+    /// authoritative-state rule. Returns whether it applied (`false` = stale/dup).
+    pub(crate) fn fold_input(&mut self, seq: u32, raw_axis: Vec2, buttons: u8) -> bool {
+        if seq <= self.last_seq {
+            return false; // stale / duplicate
+        }
+        self.last_seq = seq;
+        self.move_axis = sanitize_axis(raw_axis);
+        self.buttons = buttons;
+        true
+    }
+
+    /// Drive this entity directly from a server-internal bot (no network `seq`):
+    /// bots always produce fresh input, so there is no stale-`seq` guard. The axis
+    /// is sanitized identically to a network input.
+    pub(crate) fn drive(&mut self, raw_axis: Vec2, buttons: u8) {
+        self.move_axis = sanitize_axis(raw_axis);
+        self.buttons = buttons;
+    }
+}
+
 /// Authoritative server simulation. Add to the server app only.
 pub struct NetServerSimPlugin;
 
@@ -52,7 +76,7 @@ impl Plugin for NetServerSimPlugin {
 /// Make a freshly connected client an authoritative, replicated player at the
 /// origin. The replicated components (`NetPosition`, `RoleFlags`) plus the
 /// `Replicated` marker are attached to the backend's `ConnectedClient` entity.
-fn attach_players(mut commands: Commands, joined: Query<Entity, Added<ConnectedClient>>) {
+pub(crate) fn attach_players(mut commands: Commands, joined: Query<Entity, Added<ConnectedClient>>) {
     for entity in &joined {
         commands.entity(entity).insert((
             Replicated,
@@ -76,12 +100,11 @@ fn receive_input(
         let Ok(mut latest) = players.get_mut(entity) else {
             continue; // input before the player bundle is attached — drop it.
         };
-        if message.seq <= latest.last_seq {
-            continue; // stale / duplicate.
-        }
-        latest.last_seq = message.seq;
-        latest.move_axis = sanitize_axis(Vec2::new(message.move_x, message.move_y));
-        latest.buttons = message.buttons;
+        latest.fold_input(
+            message.seq,
+            Vec2::new(message.move_x, message.move_y),
+            message.buttons,
+        );
     }
 }
 
@@ -89,7 +112,7 @@ fn receive_input(
 /// written via `set_if_neq` so an idle player produces NO change and therefore NO
 /// replication traffic — replicon sends only changed values (the delta property
 /// the chapter is demonstrating).
-fn server_step(
+pub(crate) fn server_step(
     time: Res<Time<Fixed>>,
     mut players: Query<(&LatestInput, &mut NetPosition, &mut RoleFlags)>,
 ) {
