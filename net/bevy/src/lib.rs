@@ -1,56 +1,120 @@
-//! net-bevy — Bevy 0.18 native server-authoritative replication SKELETON.
+//! net-bevy — Bevy 0.18 native server-authoritative replication (N1).
 //!
-//! This crate is the dependency SPIKE for the net/ chapter (issue #145). Its
-//! ONLY job is to prove that `bevy_replicon` + `bevy_replicon_renet` resolve and
-//! register against Bevy 0.18, so the version-compatibility landmine is stepped
-//! on BEFORE any real server/client logic (#146) is written.
+//! The native authority + client of the net/ chapter, the Rust mirror of the
+//! web N1 sample (`net/web-three`, `net/server`): an authoritative server applies
+//! input and replicates a thin sim state; clients interpolate it for render.
 //!
-//! There is intentionally NO gameplay, NO transport binding, and NO replicated
-//! components here — only that the plugin groups construct on top of a headless
-//! Bevy `App`. Real authority + interpolation logic arrives in #146.
+//! ## Render / net-sim separation (an acceptance criterion)
+//! The crate is split so the simulation + networking is **headless-testable** and
+//! the render layer is the ONLY part that needs a GPU/window:
+//! - [`protocol`] — replicated sim components ([`protocol::NetPosition`],
+//!   [`protocol::RoleFlags`]) + the client→server [`protocol::InputMessage`].
+//! - [`sim`] — pure authoritative integration (no `App`, no socket, no window).
+//! - [`interpolation`] — pure per-entity snapshot interpolation buffer.
+//! - [`server`] — `NetServerSimPlugin`: connection handling, spawn players,
+//!   apply input, integrate (authoritative).
+//! - [`client`] — `NetClientSimPlugin`: send input, fold replicated state into
+//!   interpolation buffers.
+//! - [`transport`] — renet endpoint (UDP) setup for server / client.
+//! - [`render`] — `NetRenderPlugin`: `DefaultPlugins`, meshes, camera, keyboard.
+//!   Added ONLY by the binary; never loaded by tests.
 //!
-//! ## Plugin set (verified against docs.rs for replicon 0.40 / replicon_renet 0.16)
-//! - [`MinimalPlugins`] — headless core (no window / GPU).
-//! - [`StatesPlugin`] — replicon relies on Bevy states; with `MinimalPlugins`
-//!   this is NOT included automatically (it ships with `DefaultPlugins`), so it
-//!   must be added explicitly.
-//! - `RepliconPlugins` — core replication (from `bevy_replicon`).
-//! - `RepliconRenetPlugins` — the renet messaging backend (from
-//!   `bevy_replicon_renet`); replicon itself does no I/O.
+//! Headless tests load only `MinimalPlugins` + `StatesPlugin` + `Replicon*` +
+//! the sim/protocol/interpolation plugins — see `tests/net_loopback.rs`.
+
+use std::io;
+use std::net::SocketAddr;
 
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 use bevy_replicon::prelude::*;
 use bevy_replicon_renet::RepliconRenetPlugins;
 
-/// Build the headless replication `App` skeleton.
+pub mod client;
+pub mod config;
+pub mod interpolation;
+pub mod protocol;
+pub mod render;
+pub mod server;
+pub mod sim;
+
+/// The shared headless plugin set every net app (server, client, test) loads:
+/// the engine core with NO window/GPU, Bevy states (replicon needs them), the
+/// replication core, and the renet backend. The render layer is added ONLY by
+/// the binary, never here — that is the render / net-sim split.
 ///
-/// `RepliconRenetPlugins` registers BOTH the server and client backend plugins
-/// (its default features are `client` + `server` + `renet_netcode`), so a single
-/// builder is enough for the spike — role-specific systems (server authority,
-/// client interpolation) are deferred to #146.
-pub fn build_app() -> App {
-    let mut app = App::new();
+/// `RepliconPlugins.set(ServerPlugin::new(PostUpdate))` is used so a replication
+/// message is built on EVERY `app.update()` — the default `FixedPostUpdate` would
+/// only send on fixed ticks, making the loopback test order-sensitive.
+pub fn add_headless_net_plugins(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
         StatesPlugin,
-        RepliconPlugins,
+        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         RepliconRenetPlugins,
     ));
+}
+
+/// A headless authoritative-server app: shared net plugins + protocol + server
+/// sim. The renet endpoint is NOT bound yet — call [`start_server`] once, after
+/// the protocol is registered, so the channel layout is complete.
+pub fn build_server_app() -> App {
+    let mut app = App::new();
+    add_headless_net_plugins(&mut app);
+    app.add_plugins((protocol::NetProtocolPlugin, server::NetServerSimPlugin));
     app
 }
+
+/// A headless client app: shared net plugins + protocol + client sim (no render).
+/// The binary adds [`render::NetRenderPlugin`] on top; tests do not.
+pub fn build_client_app() -> App {
+    let mut app = App::new();
+    add_headless_net_plugins(&mut app);
+    app.add_plugins((protocol::NetProtocolPlugin, client::NetClientSimPlugin));
+    app
+}
+
+/// Bind the server's renet endpoint and insert it as resources. Returns the
+/// actually-bound address (meaningful when `bind_addr` used port 0). Must be
+/// called AFTER the protocol plugin so `RepliconChannels` is fully populated.
+pub fn start_server(
+    app: &mut App,
+    bind_addr: SocketAddr,
+    max_clients: usize,
+) -> io::Result<SocketAddr> {
+    // Borrow channels only long enough to build the endpoint (no Clone needed).
+    let (server, transport, addr) = {
+        let channels = app.world().resource::<RepliconChannels>();
+        transport::bind_server(channels, bind_addr, max_clients)?
+    };
+    app.insert_resource(server);
+    app.insert_resource(transport);
+    Ok(addr)
+}
+
+/// Bind the client's renet endpoint (pointed at `server_addr`) and insert it as
+/// resources. Must be called AFTER the protocol plugin.
+pub fn start_client(app: &mut App, server_addr: SocketAddr, client_id: u64) -> io::Result<()> {
+    let (client, transport) = {
+        let channels = app.world().resource::<RepliconChannels>();
+        transport::connect_client(channels, server_addr, client_id)?
+    };
+    app.insert_resource(client);
+    app.insert_resource(transport);
+    Ok(())
+}
+
+pub mod transport;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The spike's acceptance, as a headless test: the replicon + renet plugin
-    /// groups construct and a single update tick runs without panicking — proving
-    /// version resolution AND plugin registration are sound on Bevy 0.18.
+    /// Smoke test inherited from the #145 spike: the replicon + renet plugin
+    /// groups still construct and tick on Bevy 0.18 with the N1 protocol added.
     #[test]
-    fn app_builds_and_ticks_with_replicon_renet() {
-        let mut app = build_app();
+    fn headless_app_builds_and_ticks() {
+        let mut app = build_server_app();
         app.update();
-        // assert: no panic == plugin groups construct and tick cleanly on Bevy 0.18.
     }
 }
