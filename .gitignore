@@ -4,3 +4,6 @@ target/
 .DS_Store
 *.log
 logs/
+
+# AI-agent ephemeral git worktrees (/dev-all isolation). Never commit these.
+.claude/worktrees/
