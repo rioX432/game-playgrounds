@@ -7,7 +7,7 @@
 // application bytes directly measurable, and (c) avoids coupling measurement to
 // Colyseus's opaque delta encoding. (Codex-verified, #141.)
 
-import { Room } from '@colyseus/core';
+import { ClientState, Room } from '@colyseus/core';
 import type { Client } from '@colyseus/core';
 import {
   type Engine,
@@ -32,6 +32,10 @@ import { MSG_STAT, type StatMessage } from '../telemetry.js';
 
 const MS_PER_SEC = 1000;
 const DEFAULT_SEED = 1;
+// Derive the shim's loss-RNG stream from the same seed but a distinct offset, so
+// bot motion (consumed synchronously in tick()) stays fully reproducible
+// regardless of when async up-link loss draws happen. (golden-ratio constant)
+const SHIM_SEED_OFFSET = 0x9e3779b9;
 
 const ZERO_SHIM: ShimConfig = {
   up: { delayMs: 0, lossPct: 0 },
@@ -90,10 +94,14 @@ export class GameRoom extends Room {
     this.shimConfig = options.shim ?? ZERO_SHIM;
 
     const seed = options.seed ?? DEFAULT_SEED;
-    const rng = createRng(seed);
+    // Independent RNG streams: bot motion vs transport loss draws. Sharing one
+    // stream would make bot trajectories depend on async input-arrival timing
+    // (up-link loss draws happen in the message handler), breaking seed repro.
+    const botRng = createRng(seed);
+    const lossRng = createRng((seed ^ SHIM_SEED_OFFSET) >>> 0);
     this.world = new World();
-    this.bots = new BotDriver(this.world, rng);
-    this.shim = new TransportShim(this.shimConfig, rng);
+    this.bots = new BotDriver(this.world, botRng);
+    this.shim = new TransportShim(this.shimConfig, lossRng);
     this.collector = new MetricsCollector();
     this.bots.setCount(options.botCount ?? 0);
 
@@ -119,7 +127,11 @@ export class GameRoom extends Room {
 
     // client -> server: probe telemetry (RTT / snapshot age).
     this.onMessage<StatMessage>(MSG_STAT, (_client, stat) => {
-      if (Number.isFinite(stat.rttMs)) this.collector.recordRtt(stat.rttMs);
+      // rttMs < 0 is the probe's "no fresh measurement" sentinel — skip it so
+      // pre-echo snapshots and repeated echoes do not pollute the percentiles.
+      if (Number.isFinite(stat.rttMs) && stat.rttMs >= 0) {
+        this.collector.recordRtt(stat.rttMs);
+      }
       if (Number.isFinite(stat.snapshotAgeMs)) {
         this.collector.recordSnapshotAge(stat.snapshotAgeMs);
       }
@@ -184,7 +196,14 @@ export class GameRoom extends Room {
     const sendStart = performance.now();
     for (const client of this.clients) {
       this.collector.recordDown(payloadBytes);
-      this.shim.down(() => client.send(MSG.SNAPSHOT, snapshot));
+      // The deliver closure may run LATER (down-link delay), by which time the
+      // client could have left. Guard on JOINED so a delayed send never targets
+      // a disconnected client (which can throw on a closed connection).
+      this.shim.down(() => {
+        if (client.state === ClientState.JOINED) {
+          client.send(MSG.SNAPSHOT, snapshot);
+        }
+      });
     }
     const sendMs = performance.now() - sendStart;
 

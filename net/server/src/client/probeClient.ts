@@ -96,13 +96,18 @@ export class ProbeClient {
     const self = snap.players.find((p) => p.id === this.room.sessionId);
     const snapshotAgeMs = Math.max(recvMs - snap.serverTimeMs, 0);
 
-    let rttMs = this.lastRttMs;
+    // -1 sentinel = "no FRESH RTT measurement in this snapshot". The server
+    // records RTT only for a real, first-time echo of a given seq, so:
+    //   - pre-echo snapshots (self.seq === 0) do NOT inject a spurious 0 ms,
+    //   - a seq echoed across multiple snapshots is counted exactly once
+    //     (each input's round trip = one sample), not re-counted per snapshot.
+    let rttMs = -1;
     if (self && self.seq > 0) {
       const sentAt = this.sendTimes.get(self.seq);
       if (sentAt !== undefined) {
         rttMs = Math.max(recvMs - sentAt, 0);
         this.lastRttMs = rttMs;
-        // Drop acknowledged seqs to bound the map.
+        // Drop acknowledged seqs (also prevents re-measuring the same echo).
         for (const k of this.sendTimes.keys()) {
           if (k <= self.seq) this.sendTimes.delete(k);
         }

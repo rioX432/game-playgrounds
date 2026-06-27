@@ -5,7 +5,7 @@
 
 import { ENGINES, type Engine, type MetricsSample } from 'net-protocol';
 
-/** The 18 numeric fields of MetricsSample (everything except scenario/engine). */
+/** The 16 numeric fields of MetricsSample (the 18 total minus scenario/engine). */
 const NUMERIC_FIELDS = [
   'seed',
   'tickRate',

@@ -1,6 +1,11 @@
-// Deterministic PRNG so a scenario seed fully reproduces a run (bot motion,
-// packet-loss draws). mulberry32: tiny, fast, good enough for simulation jitter.
-// NOT for cryptography.
+// Deterministic PRNG so a scenario seed reproduces a run. mulberry32: tiny,
+// fast, good enough for simulation jitter. NOT for cryptography.
+//
+// Each consumer gets its OWN stream (see GameRoom): bot motion and transport
+// loss draws never share a stream, so bot trajectories stay reproducible
+// regardless of async message-arrival timing. (Up-link loss draw ORDER still
+// depends on real input arrival, which is inherently non-deterministic; bot
+// motion — what drives entity positions and bandwidth — does not.)
 
 export interface Rng {
   /** Next float in [0, 1). */
