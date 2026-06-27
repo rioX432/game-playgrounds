@@ -48,7 +48,11 @@ export interface GameRoomOptions {
   scenario?: string;
   /** Engine label for the sample (the render engine the probe represents). */
   engine?: Engine;
-  /** RNG seed — reproduces bot motion + loss draws. */
+  /**
+   * RNG seed. Reproduces bot MOTION exactly. Loss draws are NOT reproducible:
+   * up-link loss is drawn in the async input handler, whose ordering depends on
+   * real message-arrival timing (see sim/rng.ts).
+   */
   seed?: number;
   /** Server tick rate, Hz (clamped to the 10–30 band). */
   tickRate?: number;
@@ -116,7 +120,10 @@ export class GameRoom extends Room {
       tickRate: this.tickRate,
       injectedDelayCtoSMs: this.shimConfig.up.delayMs,
       injectedDelayStoCMs: this.shimConfig.down.delayMs,
-      lossPct: this.shimConfig.up.lossPct,
+      // The #140 schema has a SINGLE lossPct, but the shim injects up/down loss
+      // independently. Record the MAX so an asymmetric run never UNDER-reports
+      // its impairment (e.g. up=0,down=20 must not log lossPct:0).
+      lossPct: Math.max(this.shimConfig.up.lossPct, this.shimConfig.down.lossPct),
     };
 
     // client -> server: authoritative input, through the up-link shim.
@@ -193,6 +200,11 @@ export class GameRoom extends Room {
     const payloadBytes = byteLen(snapshot);
     const serializeMs = performance.now() - serializeStart;
 
+    // CAVEAT (serverTickSendMs): with down.delayMs > 0 the shim DEFERS the real
+    // client.send() into a setTimeout, so this window measures only scheduling
+    // cost, NOT the actual send/flush. serverTickSendMs is therefore only
+    // meaningful at zero down-delay; do not compare it across scenarios that
+    // differ in injected down-delay. (See net/server/CLAUDE.md.)
     const sendStart = performance.now();
     for (const client of this.clients) {
       this.collector.recordDown(payloadBytes);

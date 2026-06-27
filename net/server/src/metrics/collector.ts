@@ -16,8 +16,9 @@ export interface SampleContext {
   injectedDelayCtoSMs: number;
   injectedDelayStoCMs: number;
   /**
-   * Symmetric injected loss recorded in the (thin) schema. The shim itself
-   * supports asymmetric up/down loss; splitting this field is a deliberate
+   * Injected loss recorded in the (thin) single-field schema. The shim supports
+   * asymmetric up/down loss; the caller records `max(up, down)` so impairment is
+   * never under-reported. Splitting this into two fields is a deliberate
    * schema-rev, out of scope here (see net/CLAUDE.md).
    */
   lossPct: number;

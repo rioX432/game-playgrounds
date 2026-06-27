@@ -106,4 +106,39 @@ describe('GameRoom (in-process integration)', () => {
     // RTT was measured from an echoed seq (probe reported it back)
     expect(first.rttP50Ms).toBeGreaterThanOrEqual(0);
   });
+
+  it('records lossPct as max(up, down) so asymmetric loss is never under-reported', async () => {
+    // Arrange: loss only on the DOWN link — the schema has a single lossPct.
+    const metricsPath = join(tmpdir(), `net-${randomUUID()}.metrics.jsonl`);
+    const options: GameRoomOptions = {
+      scenario: 'n1-asym-loss',
+      engine: 'three',
+      seed: 7,
+      tickRate: TICK_RATE,
+      botCount: 2,
+      metricsPath,
+      flushIntervalMs: 100,
+      shim: {
+        up: { delayMs: 0, lossPct: 0 },
+        down: { delayMs: 0, lossPct: 20 },
+      },
+    };
+    const room = await colyseus.createRoom(ROOM_NAME, options);
+    const gameRoom = room as unknown as GameRoom;
+
+    // Act: let a few ticks run, then flush (no client needed — config-derived).
+    await new Promise((r) => setTimeout(r, 200));
+    gameRoom.forceFlushMetrics();
+
+    // Assert: lossPct == max(0, 20) == 20, NOT the up-link's 0.
+    const lines = readFileSync(metricsPath, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim().length > 0);
+    const sample = assertMetricsSample(JSON.parse(lines[0]));
+    expect(sample.lossPct).toBe(20);
+    expect(sample.injectedDelayCtoSMs).toBe(0);
+    expect(sample.injectedDelayStoCMs).toBe(0);
+
+    await room.disconnect();
+  });
 });

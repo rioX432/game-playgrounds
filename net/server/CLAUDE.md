@@ -58,9 +58,14 @@ e.g. `BOTS="2,24,100"` (each stage runs for `DURATION_MS`).
 - The loss shim is **application-level impairment** (a dropped snapshot/input),
   NOT UDP transport loss: no retransmit pressure, congestion, or TCP
   head-of-line-blocking modelling.
-- The schema's single `lossPct` records the symmetric scenario loss; the shim can
-  do asymmetric up/down loss, but splitting that field is a deliberate schema-rev
-  (out of scope for #141).
+- The schema's single `lossPct` records `max(up, down)` loss; the shim injects
+  up/down loss independently, and recording the max guarantees an asymmetric run
+  never under-reports its impairment. Splitting the field into two is a deliberate
+  schema-rev (out of scope for #141).
+- `serverTickSendMs` is only meaningful at **zero down-delay**. With `down.delayMs
+  > 0` the shim defers the real `client.send()` into a `setTimeout`, so the
+  measured send window captures only scheduling cost, not the actual flush. Do not
+  compare `serverTickSendMs` across scenarios that differ in injected down-delay.
 - In-process tests share one monotonic clock between client and server, so
   `snapshotAgeMs` and RTT are exact. Cross-machine clock-offset handling is a
   client-sample concern (the three/babylon client issues).

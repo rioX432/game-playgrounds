@@ -55,6 +55,10 @@ All measurement output is **JSON Lines**: one `MetricsSample`
   a transport-adaptation comparison.
 - RTT is measured from a **client monotonic timestamp echoed back with a seq**, not
   wall-clock subtraction across machines.
+- The single `lossPct` field records `max(up, down)` when a transport injects loss
+  asymmetrically, so an asymmetric run never under-reports its impairment.
+- `serverTickSendMs` is only meaningful when send is **not** deferred by an injected
+  send-side delay (see `net/server/CLAUDE.md`).
 
 ## Subprojects
 
