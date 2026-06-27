@@ -46,6 +46,10 @@ describe('scenario definitions (#144)', () => {
     expect(def.stages.every((s) => s.warmupMs === 10 && s.measureMs === 20)).toBe(true);
   });
 
+  it('adhoc defaults to a single 8-bot stage (the #141 baseline)', () => {
+    expect(adhoc().stages.map((s) => s.botCount)).toEqual([8]);
+  });
+
   it('adhoc carries a single caller-supplied shim across the ramp', () => {
     const shim = { up: { delayMs: 30, lossPct: 0 }, down: { delayMs: 60, lossPct: 5 } };
     const def = adhoc({ botStages: [2, 8], shim });

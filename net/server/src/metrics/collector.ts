@@ -121,7 +121,7 @@ export class MetricsCollector {
   /**
    * Discard the current window WITHOUT emitting a sample. Used to drop a
    * post-ramp warmup window so the next sample's averages are not polluted by
-   * the previous stage's bot count / interpolation transients (#144).
+   * the previous stage's bot count or the partial connect/ramp window (#144).
    */
   resetWindow(): void {
     this.reset();

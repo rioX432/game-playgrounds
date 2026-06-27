@@ -17,6 +17,8 @@ const DEFAULT_CLIENTS = 2;
 const DEFAULT_TICK = 20;
 /** Default fixed bot count for the sweep scenarios. */
 const DEFAULT_FIXED_BOTS = 24;
+/** Default bot count for the adhoc run (matches the #141 single-stage default). */
+const ADHOC_DEFAULT_BOTS = 8;
 
 /** The sync-entity ramp: 2 → 100 server bots (single fresh, live-ramped room). */
 const DEFAULT_BOT_STAGES = [2, 8, 16, 24, 50, 100] as const;
@@ -148,7 +150,7 @@ export function n2TickrateSweep(o: ScenarioOpts = {}): ScenarioDef {
 export function adhoc(o: ScenarioOpts = {}): ScenarioDef {
   const t = timing(o);
   const shim = o.shim ?? noShim();
-  const stages: Stage[] = (o.botStages ?? [o.botCount ?? DEFAULT_FIXED_BOTS]).map(
+  const stages: Stage[] = (o.botStages ?? [o.botCount ?? ADHOC_DEFAULT_BOTS]).map(
     (botCount) => ({
       botCount,
       clientCount: o.clientCount ?? DEFAULT_CLIENTS,

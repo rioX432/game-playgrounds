@@ -163,10 +163,12 @@ async function runSegment(
   try {
     for (let c = 0; c < first.clientCount; c++) {
       const cr = await connectWithRetry(colyseus, room);
+      // Track the connection BEFORE building the probe, so a probe-construction
+      // throw still leaves `cr` to be torn down in the finally.
+      clientRooms.push(cr);
       const probe = new ProbeClient(cr, { inputHz: PROBE_INPUT_HZ });
       probe.start();
       probes.push(probe);
-      clientRooms.push(cr);
     }
 
     for (const stage of segment) {
@@ -180,7 +182,15 @@ async function runSegment(
     }
   } finally {
     for (const probe of probes) probe.stop();
-    for (const cr of clientRooms) await cr.leave();
+    // Isolate each leave: one rejection must not skip the remaining leaves or the
+    // drain below (this is a finally — a throw here would also mask a try error).
+    for (const cr of clientRooms) {
+      try {
+        await cr.leave();
+      } catch {
+        // best-effort teardown; the final colyseus.shutdown() reclaims the rest
+      }
+    }
     // Drain to idle instead of disconnecting: a mid-run room.disconnect() resets
     // the shared test-client keep-alive socket. With no clients and no bots the
     // room's tick does near-zero work until the scenario's final shutdown.

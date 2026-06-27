@@ -187,9 +187,8 @@ export class GameRoom extends Room {
 
   /**
    * Force a metrics flush now (deterministic tests / scenario boundaries) and
-   * return the emitted sample. Drains+resets the collector window, exactly like
-   * the periodic flusher. Returns null only when no metricsPath was configured
-   * AND no sample is produced — in practice a sample is always built.
+   * return the emitted sample. Drains+resets the collector window exactly like
+   * the periodic flusher, and appends a line when a metricsPath is configured.
    */
   forceFlushMetrics(): MetricsSample {
     return this.flush();
@@ -199,7 +198,7 @@ export class GameRoom extends Room {
    * Discard the current measurement window without emitting a line. The
    * scenario runner calls this AFTER a per-stage warmup so the next sample's
    * windowed averages are not polluted by the previous stage's bot population
-   * or interpolation transients (#144).
+   * or by the partial connect/ramp window (#144).
    */
   resetMetricsWindow(): void {
     this.collector.resetWindow();

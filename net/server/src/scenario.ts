@@ -21,20 +21,25 @@ import { ENGINES, type Engine } from 'net-protocol';
 import { SCENARIOS, scenarioIds, type ScenarioOpts } from './scenarios/defs.js';
 import { runScenario } from './scenarios/runner.js';
 
-const numEnv = (key: string): number | undefined => {
+// Parse a numeric env knob. An empty/whitespace value (`Number('')` is 0) or a
+// value below `min` is treated as UNSET so it falls back to the scenario default
+// — a silently-accepted 0 ms measure window or negative count would emit a
+// plausible-looking but wrong metrics line (Core Value #1: honest measurement).
+const numEnv = (key: string, min = -Infinity): number | undefined => {
   const v = process.env[key];
-  if (v === undefined) return undefined;
+  if (v === undefined || v.trim() === '') return undefined;
   const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
+  return Number.isFinite(n) && n >= min ? n : undefined;
 };
 
+// Parse a comma-separated positive-number ramp (bot/tick counts must be > 0).
 const listEnv = (key: string): number[] | undefined => {
   const v = process.env[key];
   if (v === undefined) return undefined;
   const xs = v
     .split(',')
     .map((s) => Number(s.trim()))
-    .filter((n) => Number.isFinite(n));
+    .filter((n) => Number.isFinite(n) && n > 0);
   return xs.length > 0 ? xs : undefined;
 };
 
@@ -54,16 +59,16 @@ async function main(): Promise<void> {
   }
 
   const opts: ScenarioOpts = {
-    clientCount: numEnv('CLIENTS'),
-    tickRate: numEnv('TICK'),
-    botCount: numEnv('BOT_COUNT'),
+    clientCount: numEnv('CLIENTS', 1),
+    tickRate: numEnv('TICK', 1),
+    botCount: numEnv('BOT_COUNT', 0),
     botStages: listEnv('BOTS'),
     ticks: listEnv('TICKS'),
-    warmupMs: numEnv('WARMUP_MS'),
-    measureMs: numEnv('MEASURE_MS'),
+    warmupMs: numEnv('WARMUP_MS', 0),
+    measureMs: numEnv('MEASURE_MS', 1),
     shim: {
-      up: { delayMs: numEnv('DELAY_UP_MS') ?? 0, lossPct: numEnv('LOSS_UP_PCT') ?? 0 },
-      down: { delayMs: numEnv('DELAY_DOWN_MS') ?? 0, lossPct: numEnv('LOSS_DOWN_PCT') ?? 0 },
+      up: { delayMs: numEnv('DELAY_UP_MS', 0) ?? 0, lossPct: numEnv('LOSS_UP_PCT', 0) ?? 0 },
+      down: { delayMs: numEnv('DELAY_DOWN_MS', 0) ?? 0, lossPct: numEnv('LOSS_DOWN_PCT', 0) ?? 0 },
     },
   };
 
