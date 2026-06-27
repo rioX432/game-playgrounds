@@ -66,10 +66,13 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 |-----|-------|--------|
 | `protocol/` | TypeScript shared types (measurement schema + wire DTOs) | locked schema (#140) + thin DTOs (#141) |
 | `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141) |
+| `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142) |
 
 > Build: `cd net/protocol && npm install && npm run typecheck` (must stay green).
 > Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
-> This chapter does **not** touch `../three`, `../babylon`, or `../bevy` builds.
+> Build: `cd net/web-three && npm install && npm run build && npm test` (must stay green).
+> This chapter has its **own** web client (`web-three`) and does **not** touch the
+> `../three`, `../babylon`, or `../bevy` builds.
 
 ### Colyseus version pin (caveat)
 
