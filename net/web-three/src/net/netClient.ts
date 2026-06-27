@@ -106,9 +106,27 @@ export class NetClient {
 
   private onSnapshot(snap: SnapshotMessage): void {
     // Guard the one place that ingests untrusted wire data: a malformed frame
-    // must not throw inside the Colyseus message callback.
+    // must not throw here OR later in the render loop. Top-level shape first,
+    // then every player's render-critical fields (a missing pos/yaw/etc. would
+    // otherwise throw inside interpolate()/snapshotPlayers during frame()).
     if (!snap || !Array.isArray(snap.players) || typeof snap.serverTimeMs !== "number") {
       return;
+    }
+    for (const p of snap.players) {
+      if (
+        !p ||
+        typeof p.id !== "string" ||
+        typeof p.seq !== "number" ||
+        typeof p.yaw !== "number" ||
+        typeof p.flags !== "number" ||
+        !Array.isArray(p.pos) ||
+        p.pos.length < 3 ||
+        typeof p.pos[0] !== "number" ||
+        typeof p.pos[1] !== "number" ||
+        typeof p.pos[2] !== "number"
+      ) {
+        return;
+      }
     }
     this.buffer.push(snap);
     this.lastSnapshotServerTimeMs = snap.serverTimeMs;
