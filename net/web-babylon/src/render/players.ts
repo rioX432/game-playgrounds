@@ -53,9 +53,11 @@ export class PlayerViews {
       }
       // Server positions are planar (y = 0); lift the capsule onto the ground.
       view.root.position.set(p.pos[0], PLAYER_HEIGHT / 2, p.pos[2]);
-      // Server yaw = atan2(moveZ, moveX) in world x/z. Babylon's left-handed
-      // Matrix.RotationY maps local +x -> (cos, 0, -sin), so rotation.y = -yaw
-      // points the nose (local +x) along movement (same mapping as web-three).
+      // Server yaw = atan2(moveZ, moveX) in world x/z. Matrix.RotationY maps
+      // local +x -> (cos, 0, -sin) (independent of scene handedness), so
+      // rotation.y = -yaw points the nose (local +x) along movement — the same
+      // mapping web-three uses, and verified to face the same SCREEN direction
+      // now that the scene is right-handed (see render/scene.ts).
       view.root.rotation.y = -p.yaw;
 
       const firing = (p.flags & FLAG_FIRING) !== 0;

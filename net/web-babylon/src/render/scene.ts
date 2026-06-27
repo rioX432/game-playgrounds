@@ -2,9 +2,16 @@
 // ArcRotateCamera framing the whole arena so every interpolated remote player
 // stays visible. The camera is intentionally NOT given attachControl: this
 // sample's only input is movement (net/input.ts), and a draggable camera would
-// fight the keyboard. Babylon is left-handed by default; we keep that (the issue
-// asks to absorb the engine difference, not paper over it with a handedness
-// flip) — the netcode is identical to web-three, only this layer differs.
+// fight the keyboard.
+//
+// Handedness: we switch the scene to RIGHT-handed (useRightHandedSystem = true)
+// so the SCREEN convention matches web-three. Babylon defaults to left-handed,
+// which mirrors the X axis on screen (world +x projects to screen LEFT instead
+// of RIGHT) — that made the babylon client a left-right mirror of three and
+// inverted the controls relative to it. Matching three's screen convention is
+// exactly "absorbing the engine difference": same world, same on-screen result,
+// netcode identical — so the two clients differ only in this render layer.
+// (Verified numerically: world +x -> NDC.x = +0.181 in both engines.)
 
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
@@ -47,6 +54,11 @@ function buildGrid(scene: Scene) {
 
 export function createScene(engine: Engine): SceneBundle {
   const scene = new Scene(engine);
+  // Match web-three's right-handed screen convention (see header). Babylon flips
+  // the effective face winding for RH scenes, so builder meshes still render
+  // solid (not inside-out); node world matrices are unaffected, so the player
+  // yaw mapping below (rotation.y = -yaw) stays correct.
+  scene.useRightHandedSystem = true;
   scene.clearColor = CLEAR_COLOR;
 
   const grid = buildGrid(scene);

@@ -83,12 +83,20 @@ frames to blend.
 
 ## Babylon.js notes (the engine difference, absorbed)
 
-- **Left-handed by default.** We keep Babylon's native left-handed system rather
-  than forcing `useRightHandedSystem` — the issue asks to *absorb* the engine
-  difference, not hide it. Babylon's `Matrix.RotationY(θ)` maps local `+x` to
-  `(cos θ, 0, −sin θ)`, so the mesh uses `rotation.y = −yaw` to point the nose
-  along motion — coincidentally the same formula web-three uses, because both
-  conventions map local `+x` the same way.
+- **Right-handed scene to match three's screen convention.** Babylon defaults to
+  a *left-handed* system, which mirrors the X axis on screen: world `+x` projects
+  to screen **left** instead of right. Placing players at literal server
+  coordinates is not enough — the projection itself is mirrored, so a left-handed
+  babylon client comes out a left-right mirror of three with inverted controls.
+  Setting `scene.useRightHandedSystem = true` matches three's right-handed screen
+  convention (world `+x` → screen right), which is what "absorbing the engine
+  difference" actually means here. Verified numerically by projecting world
+  points through each engine's real view×projection: `+x (5,0,0)` → `NDC.x =
+  +0.181` in **both** three and babylon (left-handed babylon gave `−0.181`).
+- **Yaw mapping.** `Matrix.RotationY(θ)` maps local `+x` to `(cos θ, 0, −sin θ)`
+  independent of scene handedness, so the mesh uses `rotation.y = −yaw` to point
+  the nose along motion — the same formula web-three uses, and (with the
+  right-handed scene above) facing the same on-screen direction.
 - **Camera.** A fixed angled-overhead `ArcRotateCamera` frames the whole arena
   (no `attachControl`, so dragging never fights the keyboard). web-three uses a
   static `PerspectiveCamera` for the same framing; the Babylon idiom is
