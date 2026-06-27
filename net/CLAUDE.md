@@ -60,10 +60,20 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 
 | Dir | Stack | Status |
 |-----|-------|--------|
-| `protocol/` | TypeScript shared types (measurement schema first) | schema locked (#140) |
+| `protocol/` | TypeScript shared types (measurement schema + wire DTOs) | locked schema (#140) + thin DTOs (#141) |
+| `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141) |
 
 > Build: `cd net/protocol && npm install && npm run typecheck` (must stay green).
+> Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
 > This chapter does **not** touch `../three`, `../babylon`, or `../bevy` builds.
+
+### Colyseus version pin (caveat)
+
+The chapter targets the **0.16 series**. At impl time npm's `latest` is the 0.17
+line and `next` is 0.18, so a floating range would pull a major bump. Pinned
+EXACT: **`colyseus@0.16.3` + `@colyseus/testing@0.16.3`** (testing's 0.16 line
+tops at 0.16.3; matching both avoids `@colyseus/core` duplication). The server
+crate's `package.json` is the binding source of truth — see `net/server/CLAUDE.md`.
 
 ## Language
 

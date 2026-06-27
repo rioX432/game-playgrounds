@@ -1,0 +1,24 @@
+{
+  "name": "net-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "scenario": "tsx src/scenario.ts",
+    "dev:server": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "colyseus": "0.16.3",
+    "net-protocol": "file:../protocol"
+  },
+  "devDependencies": {
+    "@colyseus/testing": "0.16.3",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
