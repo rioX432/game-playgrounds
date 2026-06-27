@@ -11,27 +11,22 @@ use bevy::math::{Vec2, Vec3};
 
 use crate::config::{ARENA_HALF, FLAG_FIRING, FLAG_GROUNDED, PLAYER_SPEED};
 
-#[inline]
-fn clamp(v: f32, lo: f32, hi: f32) -> f32 {
-    v.clamp(lo, hi)
-}
-
 /// Integrate one entity one fixed step. The move axis is the authoritative input
 /// (each component already clamped to `[-1, 1]`); the result is clamped to the
 /// square arena. `y` is held flat (planar sample, mirrors the web `pos: [x,0,z]`).
 pub fn integrate(pos: Vec3, move_axis: Vec2, dt: f32) -> Vec3 {
     let d = PLAYER_SPEED * dt;
     Vec3::new(
-        clamp(pos.x + move_axis.x * d, -ARENA_HALF, ARENA_HALF),
+        (pos.x + move_axis.x * d).clamp(-ARENA_HALF, ARENA_HALF),
         0.0,
-        clamp(pos.z + move_axis.y * d, -ARENA_HALF, ARENA_HALF),
+        (pos.z + move_axis.y * d).clamp(-ARENA_HALF, ARENA_HALF),
     )
 }
 
 /// Sanitize a raw input axis to `[-1, 1]` per component before it enters the
 /// authoritative state (a hostile/buggy client must not inject super-speed).
 pub fn sanitize_axis(raw: Vec2) -> Vec2 {
-    Vec2::new(clamp(raw.x, -1.0, 1.0), clamp(raw.y, -1.0, 1.0))
+    Vec2::new(raw.x.clamp(-1.0, 1.0), raw.y.clamp(-1.0, 1.0))
 }
 
 /// Derive the replicated boolean-state bitfield from pressed buttons. Grounded is

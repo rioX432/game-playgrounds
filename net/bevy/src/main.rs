@@ -14,14 +14,12 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bevy::prelude::*;
-use bevy_replicon::prelude::*;
-use bevy_replicon_renet::RepliconRenetPlugins;
 
 use net_bevy::client::NetClientSimPlugin;
 use net_bevy::config::DEFAULT_PORT;
 use net_bevy::protocol::NetProtocolPlugin;
 use net_bevy::render::NetRenderPlugin;
-use net_bevy::{build_server_app, start_client, start_server};
+use net_bevy::{add_replication_plugins, build_server_app, start_client, start_server};
 
 const MAX_CLIENTS: usize = 24;
 
@@ -70,8 +68,10 @@ fn run_client(server_addr: SocketAddr) {
     let mut app = App::new();
     // Windowed: DefaultPlugins (NOT the headless MinimalPlugins) so the client
     // has a window, renderer and keyboard. DefaultPlugins already includes the
-    // states plugin replicon needs.
-    app.add_plugins((DefaultPlugins, RepliconPlugins, RepliconRenetPlugins));
+    // states plugin replicon needs; the replication plugins are shared with the
+    // headless apps via `add_replication_plugins` so the wiring can't drift.
+    app.add_plugins(DefaultPlugins);
+    add_replication_plugins(&mut app);
     app.add_plugins((NetProtocolPlugin, NetClientSimPlugin, NetRenderPlugin));
     start_client(&mut app, server_addr, fresh_client_id()).expect("failed to bind client socket");
     info!("net-bevy client connecting to {server_addr}");

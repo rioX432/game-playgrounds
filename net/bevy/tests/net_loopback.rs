@@ -23,7 +23,7 @@ use bevy_replicon::prelude::*;
 use bevy_replicon_renet::RenetClient;
 
 use net_bevy::client::{ClientInput, InterpTrack};
-use net_bevy::config::{FLAG_FIRING, FLAG_GROUNDED};
+use net_bevy::config::{interp_delay_secs, FLAG_FIRING, FLAG_GROUNDED};
 use net_bevy::protocol::{NetPosition, RoleFlags};
 use net_bevy::{build_client_app, build_server_app, start_client, start_server};
 
@@ -171,11 +171,14 @@ fn client_connected(client: &App) -> bool {
         .is_some_and(|s| *s.get() == ClientState::Connected)
 }
 
-/// Sample the client's interpolation buffer at its freshest time (proves the
-/// render-facing interpolation path produced a pose from replicated samples).
+/// Sample the client's interpolation buffer at the SAME delayed render time the
+/// render layer uses (`now - interp_delay`). After sustained movement the buffer
+/// spans well over `interp_delay`, so this lands strictly between two buffered
+/// samples — exercising the lerp path, not just the clamp-to-newest branch.
 fn sample_interpolated(client: &mut App) -> Option<Vec3> {
+    let now = client.world().resource::<Time>().elapsed_secs_f64();
+    let render_time = now - interp_delay_secs();
     let mut q = client.world_mut().query::<&InterpTrack>();
     let track = q.iter(client.world()).next()?;
-    let t = track.0.latest_time()?;
-    track.0.sample_at(t).map(|r| r.pos)
+    track.0.sample_at(render_time).map(|r| r.pos)
 }
