@@ -20,6 +20,12 @@ bevy = "=0.18.1"
 bevy_replicon = "=0.40.4"
 bevy_replicon_renet = "=0.16.0"
 
+# Wire (de)serialization for the replicated sim components + client message.
+# The wire shape is owned by this crate (explicit f32 fields, not glam Vec3), so
+# this does NOT depend on bevy_math's optional `serialize` feature. serde 1.x is
+# the same major already in replicon's tree.
+serde = { version = "1", features = ["derive"] }
+
 # --- Fast-iteration compile profiles (mirrors ../../bevy) ---
 # Build OUR crate with light optimization (fast to compile), but build all
 # DEPENDENCIES (Bevy, replicon, renet) at opt-level 3. No external tooling
