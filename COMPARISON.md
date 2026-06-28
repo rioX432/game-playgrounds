@@ -236,8 +236,42 @@ so sub-8.3 ms web cost is simply unobservable in a browser.)
 
 **Caveats this does NOT settle:** one machine / one run; physics vs. draw cost not
 separated; deterministic (Bevy) vs. random (web) scatter (negligible for timing);
-no WebGPU path measured (would lift the web ceiling); thermal/background-load
-variance not controlled.
+thermal/background-load variance not controlled. The **WebGPU path is now measured**
+— §5.1 below and §9 — and (surprise) it did **not** lift the web ceiling on these
+scenes. The table above is the **classic `WebGLRenderer` / Babylon `Engine`** path read
+off the HUD EMA; §5.1 is a separate, re-baselined instrument (raw rAF deltas via three's
+`WebGPURenderer` / Babylon's `WebGPUEngine`) whose numbers must **not** be cross-compared
+with this table (different renderer path — see #172).
+
+### 5.1 WebGPU renderer path — measured, and it doesn't lift the ceiling
+
+Chapter 3 (`docs/web-on-steam/`) added auto-measure instrumentation (raw `rAF`
+present-to-present deltas → p50/p95/**p99** + `longFrameCount`, seeded scatter) and a
+`?renderer=webgl|webgpu` switch for both web engines: three via `three/webgpu`'s
+`WebGPURenderer` (WebGPU backend, or its WebGL2 fallback via `forceWebGL`), Babylon via
+`WebGPUEngine` vs the classic `Engine`. WebGPU was confirmed GO on this machine for
+browser, Electron, and Tauri/WKWebView (§9; `docs/web-on-steam/PR0-webgpu-availability.md`).
+
+At the 2000-body stress point (Apple M3 Pro, 120 Hz vsync ON; Electron host, 3-window
+mean — browser corroborates):
+
+| engine | WebGL | WebGPU |
+|--------|:-----:|:------:|
+| **Three** | p50 8.3 ms · p99 20.1 ms · 116 fps | p50 8.3 ms · p99 **17.9 ms** · 117 fps |
+| **Babylon** | p50 13.4 ms · p99 14.6 ms · **75 fps** | p50 14.3 ms · p99 15.7 ms · **70 fps** |
+
+- **Three holds the 120 Hz cap on both backends** at 2000 bodies — its `WebGPURenderer`
+  path never falls off the median cap (the classic `WebGLRenderer` in the §5 table *did*,
+  at 61 fps; that gap is a **renderer-implementation** difference, not a WebGL-vs-WebGPU
+  one). WebGPU's only edge is a **tighter p99 tail** (17.9 vs 20.1 ms).
+- **Babylon is compute-bound here** (~70–75 fps off the cap) and **WebGPU is marginally
+  *slower* than WebGL** (14.3 vs 13.4 ms p50; 70 vs 75 fps) — WebGPU did not help, and
+  cost a little.
+- **Net:** for these physics-bound scenes, **WebGPU ≈ WebGL** (three: tail-only win;
+  babylon: small loss). The earlier "a WebGPU path would lift the web ceiling" hypothesis
+  is **not** borne out. Medians ≤ 8.3 ms are the vsync cap, so the real signal is the
+  **p99/longFrame tail** (the §9 vsync-tail axis); GPU-time below 8.3 ms is unobservable
+  from `rAF`.
 
 ---
 
@@ -250,21 +284,26 @@ variance not controlled.
   earned) + store page + upload; you keep 70%.
 
 **Exercised on macOS (arm64).** Both routes have been built end-to-end: the
-Three.js build packages into an Electron `.dmg`/`.app` (≈95 MB) that launches and
-renders the gallery, and Bevy's `cargo build --release` yields a native ≈95 MB
-binary. Native (Bevy) is the shortest path; web needs the Electron shell but
-reuses the entire codebase. Still **[maintainer]**: code signing / notarization,
-the Windows `.exe` cross-build, and the Steamworks upload (all credential-gated).
-See `docs/PACKAGING.md` for the verified commands and the packaged-content-path
-fix (`process.resourcesPath`).
+Three.js build packages into an Electron `.dmg` (**96 MB installer**, **237 MB
+installed `.app`**) that launches and renders the gallery, and Bevy's `cargo build
+--release` yields a native ≈95 MB binary. **Chapter 3 also built the Tauri route**: a
+WKWebView `.app` of just **5.0 MB** (~47× smaller — system WebView, no bundled browser),
+WebGPU GO but **macOS-26+ only** and with a headless frame-time gap — full two-layer
+comparison in **§9**. Native (Bevy) is the shortest path; web reuses the entire codebase.
+Still **[maintainer]**: code signing / notarization, the Windows `.exe` cross-build, and
+the Steamworks upload (all credential-gated). See `docs/PACKAGING.md` for the verified
+commands and the packaged-content-path fix (`process.resourcesPath`), and §9 for the
+Electron-vs-Tauri overhead numbers.
 
 ---
 
 ## 7. What this comparison does NOT establish
 
-- **Load/perf is now measured** (§5) but single-machine / single-run, with
-  physics-vs-draw cost not separated and **no WebGPU path** — so it bounds the
-  WebGL-vs-native ladder, not the full `WebGL < WebGPU < native` staircase.
+- **Load/perf is now measured** (§5) including the **WebGPU path** (§5.1, §9), but
+  single-machine / single-run with physics-vs-draw cost not separated and **vsync-capped
+  medians** (so the comparison lives in the p99 tail, and sub-8.3 ms GPU-time is
+  unobservable from `rAF`). It bounds the `WebGL ≈ WebGPU < native` ladder for these
+  physics-bound scenes — WebGPU did not lift the web ceiling here.
 - **Steam path exercised** (§6) — Electron shell + native build run locally; the
   **actual store upload is blocked on credentials**, so end-to-end shipping is
   not validated.
@@ -286,15 +325,17 @@ For light, single-machine, PC/Steam-first mechanics:
 - **Most correctness-by-construction →** Bevy, if you can absorb the compile
   times (and the subdir is tuned to minimize them).
 - **Feel →** a wash; it lives in your tuning, so don't let it decide.
-- **Performance ceiling →** Bevy — now measured (§5): native holds the 120 Hz cap
-  at 2000 bodies (~160 fps uncapped) while the WebGL engines fall off it. Still
-  **no WebGPU path measured**, which could lift the web ceiling.
+- **Performance ceiling →** Bevy — measured (§5): native holds the 120 Hz cap at 2000
+  bodies (~160 fps uncapped) while the web engines fall off it. The **WebGPU path is now
+  measured too** (§5.1, §9) and **did not lift the web ceiling** on these scenes (≈ WebGL;
+  Babylon slightly slower on WebGPU), so the ladder is `WebGL ≈ WebGPU < native` here.
 
-The next high-value step is to close the staircase's missing middle: measure a
-**WebGPU path** (Three's `WebGPURenderer` / Babylon's `WebGPUEngine`) together with
-the **Electron/Tauri distribution overhead** of shipping a web engine to Steam.
-Only together do they answer whether web is enough for PC/Steam, or whether Bevy's
-ceiling actually pays off.
+Chapter 3 (`docs/web-on-steam/`, §9) closed the staircase's missing middle: it measured the
+**WebGPU path** and the **Electron/Tauri distribution overhead** of shipping web to Steam.
+The answer for these scenes: WebGPU is not the web's escape hatch (it's at parity, vsync-
+capped); the real web-vs-native trade is **distribution** — Electron ships WebGPU on any
+macOS at a 237 MB / ~500 MB-RAM cost, Tauri ships a 5 MB app but gates WebGPU to macOS 26+
+and resists headless measurement. Bevy sidesteps both.
 
 ---
 
@@ -627,3 +668,74 @@ near a software ceiling, not GPU throughput), and it says **nothing** about web 
 bevy (a basis GAP). Real-GPU numbers replace this illustration when the probes are run
 on a GPU per the README/`CLAUDE.md` commands above — that is the honest next step, and
 it closes the #160 epic on a measurement *pipeline*, not a fabricated table.
+
+---
+
+## 9. Web-on-Steam viability (chapter 3) — WebGPU ceiling + distribution overhead
+
+The single-machine ceiling (§5) said web is "good enough but native wins". Chapter 3
+(`docs/web-on-steam/`, issues #170–#176) asks the shipping question directly: if you
+take the web engines to Steam, **(Layer 1)** does a WebGPU renderer lift their ceiling,
+and **(Layer 2)** what does the desktop wrapper (Electron vs Tauri) cost? Measured on
+one machine (Apple M3 Pro, macOS 26.6, 120 Hz vsync ON); raw evidence in
+`net/measurements/web-on-steam/` and `docs/web-on-steam/PR0-webgpu-availability.md`.
+
+### Layer 1 — renderer ceiling (WebGL vs WebGPU)
+
+Full numbers in **§5.1**. One-line result: **WebGPU ≈ WebGL** on these physics-bound
+2000-body scenes. Three stays pinned to the 120 Hz cap on both backends (WebGPU only
+trims the p99 tail, 17.9 vs 20.1 ms); Babylon is compute-bound (~70–75 fps) and WebGPU
+is **marginally slower** than WebGL. `longFrameCount(>50 ms)` is **0** everywhere — no
+gross jank — so the entire signal is the p99 tail, not stutter. WebGPU is **not** the
+web's escape hatch here.
+
+### Layer 2 — distribution-host overhead (Electron vs Tauri)
+
+| Axis | **Electron** (bundled Chromium 130) | **Tauri** (system WKWebView) |
+|------|--------------------------------------|------------------------------|
+| Installed footprint (`.app`) | **237 MB** | **5.0 MB** (~47×) |
+| Installer (`.dmg`, unsigned) | 96 MB | (bundling failed locally on signing; `.app` is the figure) |
+| WebGPU | **GO on any macOS** (ships its own Chromium) | **GO but macOS-26+ only** (WKWebView is OS-bound) + release-build-only (tauri#6381) |
+| Web-content RAM @100→2000 bodies | app-owned process tree, ~485→615 MB (three) / ~470→567 MB (babylon) | app proc ~104 MB **+ shared launchd-owned `com.apple.WebKit.*` XPC services** — no comparable tree |
+| Cold-start (spawn→first window) | ~3.0–3.5 s | (not captured — see throttle gap) |
+| Headless frame-time capture | **works** (Chromium window foregrounds; CDP-harvestable) | **blocked** — WKWebView throttles rAF/timers while occluded/`visibilityState:"hidden"`; needs an attended, truly-foregrounded run |
+
+Trade in one line: **Electron = big and boring-reliable** (47× the size and ~½ GB of
+app-owned RAM, but WebGPU on any macOS and measurable like a normal app); **Tauri =
+tiny but OS-coupled and measurement-hostile** (5 MB, but WebGPU only on macOS 26+,
+RAM that lives in shared system processes, and a webview that throttles itself when not
+in front).
+
+### Inevitable gaps (do not over-read the numbers)
+
+- **Compositor vs. winit.** Web frames pass through the OS/browser compositor; Bevy
+  draws through `winit` with no such layer. The hosts are not the same presentation
+  path, so absolute web-vs-native magnitudes are **directional, not equal-footing**.
+- **ANGLE vs. wgpu is directional only.** Web "WebGL" is ANGLE-on-Metal, web "WebGPU"
+  is WebKit/Chromium-on-Metal, Bevy is `wgpu`-on-Metal — three different stacks over
+  the same GPU. Cross-stack deltas indicate direction, not a clean backend benchmark.
+- **GPU-time is not measured.** `rAF` is vsync-locked at 8.3 ms, so any GPU cost below
+  the cap is **unobservable** in a browser (and not portable to capture). The tail
+  (p99 / `longFrameCount`), under **vsync ON**, is the deliberate primary axis — not
+  the median.
+- **Apple Silicon only; Windows WebView2 untested.** Everything here is macOS 26 / M3
+  Pro. Tauri's Windows path bundles a Chromium-based WebView2 and is *expected* to
+  behave like Electron/Chromium for WebGPU, but that is **not measured**.
+
+### What §9 does NOT establish
+
+- **Attended, single-machine, single-run.** Not a fleet/throughput benchmark (chapter
+  scope, CLAUDE.md "Won't Do"). Tauri's frame-time specifically needs a foregrounded
+  re-run; the IPC harness is in place for it.
+- **Tauri WebGPU availability is OS-version-fragile.** GO on macOS 26 here; the dev-vs-
+  release and macOS-version gating (tauri#6381) mean a different OS could flip it.
+- **No external performance multipliers are transcribed into the verdict.** The
+  conclusion rests only on what was measured on this machine; vendor "WebGPU is N×
+  faster" claims are not imported.
+
+**Bottom line for Web-on-Steam:** WebGPU does not rescue the web ceiling (it's at
+parity here), so the web-vs-native decision is really a **distribution** decision.
+Electron is the safe, heavy, WebGPU-on-any-macOS choice; Tauri is the featherweight
+that trades size for an OS-26 WebGPU floor and a measurement-hostile webview. If the
+ceiling is what matters, Bevy still wins §5; if reusing the web codebase matters more,
+Electron is the low-risk shipping path and Tauri the size-optimised gamble.
