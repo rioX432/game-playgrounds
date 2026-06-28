@@ -30,22 +30,24 @@ cd babylon && npm run build -- --base=./
 
 # Run the matrix (per engine × backend). The runner launches the Electron shell on the
 # 13-stress auto-measure URL, harvests window.__renderSamples over CDP, and samples the
-# process-tree RAM + cold-start. See packaging/electron/measure.mjs.
+# process-tree RAM + cold-start. See packaging/electron/measure.mjs. (Numeric knobs left
+# at the runner's defaults — SEED=12345, WARMUP_MS=1000, WINDOW_MS=1500, MAX_WINDOWS=3,
+# BODIES=100,500,1000,1500,2000 — are passed explicitly below for reproducibility.)
 cd packaging/electron
-common="SEED=12345 WARMUP_MS=1000 WINDOW_MS=1500 MAX_WINDOWS=3 BODIES=100,500,1000,1500,2000"
-env $common WEB_DIST=../../three/dist   ENGINE=three   BACKEND=webgl  PORT=9340 OUT=../../net/measurements/web-on-steam/electron-three-webgl.jsonl    node measure.mjs
-env $common WEB_DIST=../../three/dist   ENGINE=three   BACKEND=webgpu PORT=9350 OUT=../../net/measurements/web-on-steam/electron-three-webgpu.jsonl   node measure.mjs
-env $common WEB_DIST=../../babylon/dist ENGINE=babylon BACKEND=webgl  PORT=9360 OUT=../../net/measurements/web-on-steam/electron-babylon-webgl.jsonl  node measure.mjs
-env $common WEB_DIST=../../babylon/dist ENGINE=babylon BACKEND=webgpu PORT=9370 OUT=../../net/measurements/web-on-steam/electron-babylon-webgpu.jsonl node measure.mjs
+M="../../net/measurements/web-on-steam"
+SEED=12345 WARMUP_MS=1000 WINDOW_MS=1500 MAX_WINDOWS=3 BODIES=100,500,1000,1500,2000 WEB_DIST=../../three/dist   ENGINE=three   BACKEND=webgl  PORT=9340 OUT=$M/electron-three-webgl.jsonl    node measure.mjs
+SEED=12345 WARMUP_MS=1000 WINDOW_MS=1500 MAX_WINDOWS=3 BODIES=100,500,1000,1500,2000 WEB_DIST=../../three/dist   ENGINE=three   BACKEND=webgpu PORT=9350 OUT=$M/electron-three-webgpu.jsonl   node measure.mjs
+SEED=12345 WARMUP_MS=1000 WINDOW_MS=1500 MAX_WINDOWS=3 BODIES=100,500,1000,1500,2000 WEB_DIST=../../babylon/dist ENGINE=babylon BACKEND=webgl  PORT=9360 OUT=$M/electron-babylon-webgl.jsonl  node measure.mjs
+SEED=12345 WARMUP_MS=1000 WINDOW_MS=1500 MAX_WINDOWS=3 BODIES=100,500,1000,1500,2000 WEB_DIST=../../babylon/dist ENGINE=babylon BACKEND=webgpu PORT=9370 OUT=$M/electron-babylon-webgpu.jsonl node measure.mjs
 ```
 
 ## Distribution-overhead summary (this run)
 
 | Metric | three | babylon |
 |---|---|---|
-| RAM (process-tree RSS) @100 → 2000 bodies | 462 → 615 MB | 473 → 571 MB |
-| Process count (main + renderer + GPU + 2 helpers) | 5 | 5 |
-| Cold-start (spawn → first measured window) | ~3.0–3.4 s | ~3.4–4.0 s |
+| RAM (process-tree RSS) @100 → 2000 bodies | ~485 → 615 MB | ~470 → 567 MB |
+| Process count (npm-shim/main + renderer + GPU + 2 helpers) | 5 | 5 |
+| Cold-start (spawn → first measured window) | ~3.0–3.4 s | ~3.4–3.5 s |
 | Installer (DMG, unsigned) | 96 MB | ≈ 96 MB (web bundle delta only) |
 | Installed footprint (`.app`) | 237 MB | ≈ 237 MB (web bundle delta only) |
 

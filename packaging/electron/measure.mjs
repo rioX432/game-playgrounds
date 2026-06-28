@@ -21,16 +21,20 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const env = process.env;
+/** Parse a numeric env var, falling back to `d` on anything non-finite (NaN-safe). */
+const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+
 const WEB_DIST = env.WEB_DIST ? resolve(env.WEB_DIST) : null;
 const ENGINE = env.ENGINE ?? "three";
 const BACKEND = env.BACKEND ?? "webgpu";
-const BODIES = (env.BODIES ?? "100,500,1000,1500,2000").split(",").map((s) => Number(s.trim()));
-const SEED = Number(env.SEED ?? 12345);
-const WARMUP_MS = Number(env.WARMUP_MS ?? 1000);
-const WINDOW_MS = Number(env.WINDOW_MS ?? 1500);
-const MAX_WINDOWS = Number(env.MAX_WINDOWS ?? 3);
+const BODIES = (env.BODIES ?? "100,500,1000,1500,2000")
+  .split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
+const SEED = num(env.SEED, 12345);
+const WARMUP_MS = num(env.WARMUP_MS, 1000);
+const WINDOW_MS = num(env.WINDOW_MS, 1500);
+const MAX_WINDOWS = num(env.MAX_WINDOWS, 3);
 const OUT = env.OUT ?? "electron-render.jsonl";
-const BASE_PORT = Number(env.PORT ?? 9333);
+const BASE_PORT = num(env.PORT, 9333);
 const ELECTRON_BIN = env.ELECTRON_BIN ?? resolve("./node_modules/.bin/electron");
 
 if (!WEB_DIST) { console.error("WEB_DIST is required"); process.exit(2); }
