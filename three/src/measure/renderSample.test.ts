@@ -7,6 +7,7 @@ import {
 
 const META: RenderSampleMeta = {
   engine: "three",
+  renderer: "three-webgl-classic",
   backend: "webgl",
   host: "browser",
   bodies: 2000,
@@ -21,6 +22,7 @@ describe("aggregateRenderWindow", () => {
 
     // Identity passes through verbatim.
     expect(sample.engine).toBe("three");
+    expect(sample.renderer).toBe("three-webgl-classic");
     expect(sample.backend).toBe("webgl");
     expect(sample.host).toBe("browser");
     expect(sample.bodies).toBe(2000);
@@ -41,6 +43,20 @@ describe("aggregateRenderWindow", () => {
     expect(sample.frameCount).toBe(10);
     // fpsMean = 10 / (260/1000) = 38.4615...
     expect(sample.fpsMean).toBeCloseTo(38.4615, 3);
+  });
+
+  it("passes the WebGPURenderer identity (three-webgpu) through verbatim", () => {
+    const webgpuMeta: RenderSampleMeta = {
+      engine: "three",
+      renderer: "three-webgpu",
+      backend: "webgpu",
+      host: "browser",
+      bodies: 2000,
+      seed: 12345,
+    };
+    const sample = aggregateRenderWindow([16, 16, 16], webgpuMeta);
+    expect(sample.renderer).toBe("three-webgpu");
+    expect(sample.backend).toBe("webgpu");
   });
 
   it("guards an empty window (no divide-by-zero)", () => {

@@ -3,7 +3,18 @@
 // Measure mode is OFF for ordinary interactive play; it turns ON with `?measure=1`.
 // The auto-measure URL contract is:
 //   ?sample=13-stress-bodies&bodies=2000&measure=1&seed=N&warmupMs=...&windowMs=...
+//   &renderer=webgl|webgpu     (optional; absent = the classic WebGLRenderer path)
 // PURE — no globals, no DOM — so it unit-tests without a browser.
+
+/**
+ * Which renderer the measure run drives (#172).
+ *  - `"classic"`        — PR1 baseline: the classic `WebGLRenderer` (param absent).
+ *  - `"webgpu"`         — `WebGPURenderer` on its WebGPU backend.
+ *  - `"webgpu-webgl2"`  — `WebGPURenderer` on its WebGL2 fallback backend.
+ * The two `webgpu*` modes are ONE renderer family (`three/webgpu`) differing only in
+ * backend; neither equals the classic `WebGLRenderer` — see PR0 §re-baseline.
+ */
+export type RendererMode = "classic" | "webgpu" | "webgpu-webgl2";
 
 /** Default number of dynamic bodies spawned in measure mode. */
 const DEFAULT_BODIES = 2000;
@@ -32,6 +43,22 @@ export interface MeasureParams {
   windowMs: number;
   /** Number of windows to capture before stopping. */
   maxWindows: number;
+  /** Which renderer/backend the run drives. Absent param → `"classic"`. */
+  rendererMode: RendererMode;
+}
+
+/** Map the `?renderer=` param value to a {@link RendererMode}. Unknown → classic. */
+function parseRendererMode(raw: string | null): RendererMode {
+  switch (raw) {
+    case "webgpu":
+      return "webgpu";
+    case "webgl":
+      // `webgl` selects WebGPURenderer's WebGL2 FALLBACK backend — NOT the classic
+      // WebGLRenderer (which is the param-absent default). See PR0 §re-baseline.
+      return "webgpu-webgl2";
+    default:
+      return "classic";
+  }
 }
 
 /** Parse an integer query param, falling back to `fallback` on missing/NaN. */
@@ -57,5 +84,6 @@ export function parseMeasureParams(search: string): MeasureParams {
     warmupMs: intParam(params, "warmupMs", DEFAULT_WARMUP_MS),
     windowMs: intParam(params, "windowMs", DEFAULT_WINDOW_MS),
     maxWindows: intParam(params, "maxWindows", DEFAULT_MAX_WINDOWS),
+    rendererMode: parseRendererMode(params.get("renderer")),
   };
 }

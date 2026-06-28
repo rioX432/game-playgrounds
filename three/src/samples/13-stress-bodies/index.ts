@@ -163,6 +163,9 @@ const sample: Sample = {
           maxWindows: params.maxWindows,
           meta: {
             engine: "three",
+            // Classic WebGLRenderer path = PR1 baseline; labelled distinctly from
+            // PR2's WebGPURenderer paths so §5/§9 never cross-compare them (#172).
+            renderer: "three-webgl-classic",
             backend: "webgl",
             host: "browser",
             bodies: params.bodies,
