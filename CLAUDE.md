@@ -48,6 +48,16 @@ cd bevy && cargo run --features bevy/dynamic_linking   # run with fast increment
   modeling, autoscaling. The `net/` chapter measures patterns + characteristics on a
   single machine (localhost); production-scale cost/scale behavior is an ops concern,
   not a mechanic-reproduction one — it fails the Core Value one-step test (see `COMPARISON.md` §8.6).
+- **Real-time voice / audio chat.** Voice differentiates *transport topology* (WebRTC
+  mesh vs. SFU vs. raw-over-datachannel) and *platform* (browser WebRTC vs. native
+  `webrtc-rs`+`cpal`+`opus`), **not the three render engines** — on web both clients run
+  identical browser-WebRTC code (zero three-vs-babylon signal, cf. §8.1), and on native
+  the audio stack lives *next to* Bevy in non-Bevy crates, not in it. It fails the Core
+  Value one-step test on all three axes: #1 (no render-engine-specific feel), #2 (idiomatic
+  to none; pulls in a separate media stack), #3 (needs a live mic/ear, not headless-/
+  build-green-testable). It would also force the deliberately-thin `MetricsSample` schema
+  to grow an audio axis. Voice belongs to a VoIP study, not a render-engine comparison.
+  (Supersedes `COMPARISON.md` §8.6's earlier "later chapter" note. See issue #161.)
 
 ## Issues & dev-all
 
