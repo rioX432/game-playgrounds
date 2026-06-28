@@ -6,6 +6,20 @@
 export { ENGINES } from './metrics.js';
 export type { Engine, MetricsSample } from './metrics.js';
 
+// Client-render measurement (sidecar — separate `client-render.jsonl`, NOT a
+// `MetricsSample` schema-rev). See `clientRender.ts` for the design rationale.
+export {
+  aggregateRenderWindow,
+  THROTTLE_MAX_MS,
+  MIN_VALID_SAMPLES,
+} from './clientRender.js';
+export type {
+  ClientRenderSample,
+  MeasurementBasis,
+  RenderWindowConfig,
+  RenderWindowAggregate,
+} from './clientRender.js';
+
 export { FLAG_GROUNDED, FLAG_FIRING, MSG } from './messages.js';
 export type {
   Vec3,

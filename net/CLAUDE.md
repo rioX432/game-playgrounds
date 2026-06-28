@@ -68,6 +68,18 @@ All measurement output is **JSON Lines**: one `MetricsSample`
   estimate), and `rttP50/P95Ms` is **renet transport RTT** that does NOT include
   app-injected delay. Full table in `net/bevy/CLAUDE.md` → "Honest-parity". Read it
   before cross-engine diffing (#148).
+- **Client-render metrics live in a SEPARATE sidecar, by deliberate design.** Client
+  fps / frame-time (p50/p95) are NOT fields on `MetricsSample`; they are recorded in
+  their own `client-render.jsonl` file as `ClientRenderSample`
+  (`net/protocol/src/clientRender.ts`, #165), one line per per-client measurement
+  window. The server `MetricsSample` stays thin. Rationale: web fps is sampled from
+  `requestAnimationFrame` deltas while Bevy fps comes from frame-time diagnostics —
+  a §8.2 parity gap (see `COMPARISON.md`), so they are not a directly-comparable
+  "client truth" to fold onto every server line. The sidecar carries the same join
+  keys (`scenario` / `engine` / `seed` / `tickRate` / `clientCount` / `botCount` +
+  impairment knobs) so it LEFT JOINs onto `metrics.jsonl` without pretending to be
+  one. The shared pure sampler `aggregateRenderWindow` (frame deltas → fps + p50/p95)
+  is unit-tested headless; the per-engine probes (#166/#167/#168) reuse it.
 
 ## Subprojects
 
@@ -79,7 +91,7 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 | `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143) |
 | `bevy/` | Rust + Bevy `0.18.1` + `bevy_replicon 0.40.4` / `bevy_replicon_renet 0.16.0` native authority+client | dependency spike — `cargo check` green + minimal plugin skeleton (#145); N1 server-authoritative replication + client interpolation, render/net-sim split, real-UDP loopback test (#146); N2 load probe — bot ramp + app-level bidirectional conditioner + `metrics.jsonl` in the #140 schema, with documented honest-parity gaps vs the web probe (#147) |
 
-> Build: `cd net/protocol && npm install && npm run typecheck` (must stay green).
+> Build: `cd net/protocol && npm install && npm run typecheck && npm test` (must stay green).
 > Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
 > Build: `cd net/web-three && npm install && npm run build && npm test` (must stay green).
 > Build: `cd net/web-babylon && npm install && npm run build && npm test` (must stay green).
