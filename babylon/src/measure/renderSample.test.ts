@@ -43,6 +43,13 @@ describe("aggregateRenderWindow", () => {
     expect(sample.fpsMean).toBeCloseTo(38.4615, 3);
   });
 
+  it("passes a webgpu backend through verbatim (#173)", () => {
+    const webgpuMeta: RenderSampleMeta = { ...META, backend: "webgpu" };
+    const sample = aggregateRenderWindow([16, 16, 16], webgpuMeta);
+    expect(sample.backend).toBe("webgpu");
+    expect(sample.engine).toBe("babylon");
+  });
+
   it("guards an empty window (no divide-by-zero)", () => {
     const sample = aggregateRenderWindow([], META);
     expect(sample.frameCount).toBe(0);

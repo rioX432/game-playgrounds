@@ -15,7 +15,17 @@ export type RenderEngine = "three" | "babylon";
 /** One auto-measure window. Emitted as one JSONL line per closed window. */
 export interface RenderSample {
   engine: RenderEngine;
-  backend: "webgl";
+  /**
+   * Which render backend produced the sample (#173). `"webgpu"` is stamped ONLY
+   * after `WebGPUEngine.IsSupportedAsync` confirmed support — `WebGPUEngine` does
+   * not auto-fall-back to WebGL, so the label is honest by construction.
+   *
+   * NOTE (asymmetry from the three sidecar): three needs an extra `renderer`
+   * disambiguator because its `webgl` path is `WebGPURenderer`'s WebGL2 fallback,
+   * NOT its PR1 classic `WebGLRenderer`. Babylon's `webgl` IS the PR1 `Engine`, so
+   * `engine:"babylon"` + `backend` already disambiguate — no `renderer` field here.
+   */
+  backend: "webgl" | "webgpu";
   host: "browser";
   /** Number of dynamic bodies in the scene during the window. */
   bodies: number;

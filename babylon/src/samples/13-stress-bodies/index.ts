@@ -1,18 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
-import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
-import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate";
-import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
-import "@babylonjs/core/Meshes/Builders/groundBuilder";
-import "@babylonjs/core/Meshes/Builders/boxBuilder";
-import "@babylonjs/core/Physics/physicsEngineComponent";
-
-import { createHavokPlugin } from "../../engine/havok";
 import { createHud } from "../../engine/hud";
 import { createInput } from "../../engine/input";
 import { parseMeasureParams } from "../../measure/config";
@@ -21,7 +6,13 @@ import { installRenderSampleSink } from "../../measure/globals";
 import { RenderProbe } from "../../measure/probe";
 import { createRng } from "../../measure/rng";
 import type { Sample, SampleContext } from "../types";
-import { computeSpawnPositions } from "./spawn";
+import {
+  BATCH_SIZE,
+  MAX_BODIES,
+  enableStressPhysics,
+  setupStressVisuals,
+  type StressBodies,
+} from "./stressScene";
 
 /**
  * 13 — Stress / load harness (Babylon.js + Havok).
@@ -31,17 +22,15 @@ import { computeSpawnPositions } from "./spawn";
  * count. Havok auto-steps and auto-syncs each `PhysicsAggregate`'s mesh, so there
  * is no manual stepping/sync here — the least boilerplate of the three.
  *
+ * The scene itself (camera, lights, physics world, seeded scatter) lives in the
+ * shared ./stressScene module so the WebGPU measure path (#173) builds the SAME
+ * scene on a `WebGPUEngine`. This file is the WebGL `Engine` GALLERY path: it adds
+ * the interactive HUD/input/stats chrome and, in measure mode, the RenderProbe.
+ *
  * NOTE: numbers are read at runtime and intentionally NOT recorded in
  * COMPARISON.md. Matched ms/frame across the three engines must be captured by
  * running each build, not asserted here.
  */
-
-const GRAVITY_Y = -9.81;
-const BOX_HALF = 0.3;
-const BATCH_SIZE = 100;
-const MAX_BODIES = 2000;
-const FLOOR_SIZE = 24;
-// SPAWN_HEIGHT / SPAWN_SPREAD live in ./spawn (shared with the determinism test).
 
 export const sample13: Sample = {
   id: "13-stress-bodies",
@@ -52,24 +41,7 @@ export const sample13: Sample = {
 
   mount(ctx: SampleContext): () => void {
     const { scene, canvas } = ctx;
-    scene.clearColor.set(0.05, 0.06, 0.08, 1);
-
-    const camera = new ArcRotateCamera(
-      "stressCam",
-      -Math.PI / 2,
-      Math.PI / 3,
-      32,
-      new Vector3(0, 2, 0),
-      scene,
-    );
-    camera.attachControl(canvas, true);
-
-    new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
-    const sun = new DirectionalLight("sun", new Vector3(-0.4, -1, -0.3), scene);
-    sun.intensity = 0.8;
-
-    const boxMat = new StandardMaterial("stressBoxMat", scene);
-    boxMat.diffuseColor = new Color3(1, 0.53, 0.27);
+    const { boxMat } = setupStressVisuals(scene, canvas);
 
     const hud = createHud(ctx, {
       title: "Controls",
@@ -97,75 +69,23 @@ export const sample13: Sample = {
 
     let disposed = false;
     let msPerFrame = 0;
-    const bodies: { mesh: Mesh; aggregate: PhysicsAggregate }[] = [];
-    // A hidden template box; clones share its geometry + material (cheap spawn).
-    let template: Mesh | null = null;
+    let world: StressBodies | null = null;
 
     // Always seed the scatter (deterministic even outside measure mode) so a given
     // seed reproduces an identical run.
     const params = parseMeasureParams(window.location.search);
     const rng = createRng(params.seed);
 
-    // Spawn `n` boxes (capped at the safety limit), drawing positions from the
-    // seeded rng so the scatter is reproducible.
-    const spawnBodies = (n: number): void => {
-      if (!template) return;
-      const room = MAX_BODIES - bodies.length;
-      const count = Math.min(n, room);
-      if (count <= 0) return;
-      for (const p of computeSpawnPositions(count, rng)) {
-        const box = template.clone(`box${bodies.length}`, null) as Mesh;
-        box.setEnabled(true);
-        box.position.set(p.x, p.y, p.z);
-        const aggregate = new PhysicsAggregate(
-          box,
-          PhysicsShapeType.BOX,
-          { mass: 1, restitution: 0.1 },
-          scene,
-        );
-        bodies.push({ mesh: box, aggregate });
-      }
-    };
-
-    const addBatch = (): void => spawnBodies(BATCH_SIZE);
-
-    const clearAll = (): void => {
-      for (const b of bodies) {
-        b.aggregate.dispose();
-        b.mesh.dispose();
-      }
-      bodies.length = 0;
-    };
-
-    // Havok WASM loads on demand; guard against unmount during the await.
-    void createHavokPlugin().then((plugin) => {
-      // Switched away mid-load: dispose the orphan plugin so it doesn't leak its
-      // native world (it was never handed to a scene that would dispose it).
-      if (disposed) {
-        plugin.dispose();
-        return;
-      }
-      scene.enablePhysics(new Vector3(0, GRAVITY_Y, 0), plugin);
-
-      const floor = MeshBuilder.CreateGround(
-        "floor",
-        { width: FLOOR_SIZE, height: FLOOR_SIZE },
-        scene,
-      );
-      const floorMat = new StandardMaterial("stressFloorMat", scene);
-      floorMat.diffuseColor = new Color3(0.22, 0.22, 0.26);
-      floor.material = floorMat;
-      new PhysicsAggregate(floor, PhysicsShapeType.BOX, { mass: 0 }, scene);
-
-      // Hidden template the batch clones from (so we build geometry once).
-      template = MeshBuilder.CreateBox("boxTemplate", { size: BOX_HALF * 2 }, scene);
-      template.material = boxMat;
-      template.setEnabled(false);
+    // Havok WASM loads on demand; the shared builder disposes the orphan plugin
+    // if we already switched away (disposed) by the time it resolves.
+    void enableStressPhysics(scene, boxMat, rng, () => disposed).then((built) => {
+      if (!built) return;
+      world = built;
 
       if (params.measure) {
         // Auto-measure: spawn the full body count, then drive a RenderProbe off the
         // engine's real render cadence via the bootstrap frame hook.
-        spawnBodies(params.bodies);
+        world.spawnBodies(params.bodies);
         const sink = installRenderSampleSink();
         const probe = new RenderProbe({
           warmupMs: params.warmupMs,
@@ -186,7 +106,7 @@ export const sample13: Sample = {
           if (probe.isDone()) setFrameHook(null);
         });
       } else {
-        addBatch(); // seed one batch
+        world.spawnBodies(BATCH_SIZE); // seed one batch
       }
     });
 
@@ -198,13 +118,14 @@ export const sample13: Sample = {
 
       // Ignore manual input during a measurement run so a stray keypress can't
       // corrupt a window (body count is fixed by params.bodies in measure mode).
-      if (!params.measure) {
-        if (input.consumeJustPressed("Space")) addBatch();
-        if (input.consumeJustPressed("KeyR")) clearAll();
+      if (!params.measure && world) {
+        if (input.consumeJustPressed("Space")) world.spawnBodies(BATCH_SIZE);
+        if (input.consumeJustPressed("KeyR")) world.clearAll();
       }
 
+      const count = world?.count ?? 0;
       const fps = msPerFrame > 0 ? 1000 / msPerFrame : 0;
-      stats.textContent = `bodies: ${bodies.length}  |  ${msPerFrame.toFixed(1)} ms/frame  (~${Math.round(fps)} FPS)`;
+      stats.textContent = `bodies: ${count}  |  ${msPerFrame.toFixed(1)} ms/frame  (~${Math.round(fps)} FPS)`;
     });
 
     return () => {
@@ -214,8 +135,7 @@ export const sample13: Sample = {
       input.dispose();
       hud.dispose();
       stats.remove();
-      clearAll();
-      template?.dispose();
+      world?.dispose();
       // The scene + its physics engine are torn down by the gallery's scene.dispose.
     };
   },
