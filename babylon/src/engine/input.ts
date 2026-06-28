@@ -1,5 +1,6 @@
 import { KeyboardEventTypes } from "@babylonjs/core/Events/keyboardEvents";
 import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
+import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { Observer } from "@babylonjs/core/Misc/observable";
 import type { KeyboardInfo } from "@babylonjs/core/Events/keyboardEvents";
 import type { PointerInfo } from "@babylonjs/core/Events/pointerEvents";
@@ -64,7 +65,12 @@ export function createInput(
   options: InputOptions = {},
 ): InputController {
   const { scene, canvas } = ctx;
-  const engine = ctx.engine;
+  // Pointer-lock helpers (enter/exitPointerlock) live on the concrete WebGL
+  // `Engine`, not on the shared `AbstractEngine` base (#173). The gallery's
+  // Playground always supplies an `Engine`; the WebGPU measure path is
+  // input-less and never calls createInput. reason: narrow to the concrete
+  // type the gallery always provides for the pointer-lock API.
+  const engine = ctx.engine as Engine;
   const usePointerLock = options.pointerLock ?? true;
 
   const pressed = new Set<string>();

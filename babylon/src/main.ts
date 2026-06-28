@@ -1,4 +1,5 @@
 import { Playground } from "./engine/bootstrap";
+import { parseMeasureParams } from "./measure/config";
 import { samples, findSample } from "./samples/registry";
 import type { Sample } from "./samples/types";
 
@@ -10,78 +11,107 @@ if (!canvas || !sidebar || !overlay) {
   throw new Error("Required DOM elements (#app, #sidebar, #overlay) missing.");
 }
 
-const playground = new Playground(canvas);
-
-/** Build the left sidebar list from the registry. */
-function buildSidebar(): void {
-  const heading = document.createElement("h1");
-  heading.textContent = "Babylon Playground";
-  sidebar!.appendChild(heading);
-
-  const list = document.createElement("ul");
-  list.className = "sample-list";
-  for (const sample of samples) {
-    const li = document.createElement("li");
-    li.dataset.id = sample.id;
-
-    const title = document.createElement("span");
-    title.className = "sample-title";
-    title.textContent = sample.title;
-    li.appendChild(title);
-
-    const tags = document.createElement("span");
-    tags.className = "sample-tags";
-    tags.textContent = sample.tags.join(" · ");
-    li.appendChild(tags);
-
-    li.addEventListener("click", () => {
-      location.hash = `#/${sample.id}`;
+// WebGPU measure path (#173): `?renderer=webgpu` drives the shared 13-stress scene
+// on a `WebGPUEngine` instead of the gallery's WebGL `Engine`. Loaded by a DYNAMIC
+// import so the gallery bundle doesn't carry the WebGPU subsystems (+twgsl WASM)
+// unless requested. When `?renderer` is absent or `webgl`, the gallery below is
+// the untouched PR1 path. (No three-style module-graph hazard — both engines come
+// from `@babylonjs/core` — so this dynamic import is purely a bundle-size choice.)
+const measureParams = parseMeasureParams(location.search);
+if (measureParams.rendererMode === "webgpu") {
+  import("./engine/measureWebgpu")
+    .then(({ runWebgpuMeasure }) =>
+      runWebgpuMeasure(canvas, measureParams, overlay),
+    )
+    .catch((err: unknown) => {
+      // Surface chunk-load / engine-init / WASM-load failures instead of a silent
+      // blank canvas.
+      console.error("[measure] WebGPU measure path failed:", err);
+      overlay.textContent = `WebGPU measure path failed: ${String(err)}`;
     });
-    list.appendChild(li);
-  }
-  sidebar!.appendChild(list);
-}
-
-/** Update the overlay (title + summary) and the active sidebar row. */
-function renderOverlay(sample: Sample): void {
-  // The previous sample's own overlay UI was already removed by its dispose fn
-  // (run during teardown, before this hook fires), so it is safe to reset here.
-  overlay!.innerHTML = "";
-  const title = document.createElement("h2");
-  title.textContent = sample.title;
-  const summary = document.createElement("p");
-  summary.textContent = sample.summary;
-  overlay!.appendChild(title);
-  overlay!.appendChild(summary);
-
-  sidebar!
-    .querySelectorAll("li")
-    .forEach((li) =>
-      li.classList.toggle("active", li.dataset.id === sample.id),
-    );
-}
-
-/** Resolve the current hash to a sample and mount it. */
-function route(): void {
-  const id = location.hash.replace(/^#\/?/, "");
-  const sample = findSample(id) ?? samples[0];
-  if (!sample) return;
-  // beforeMount runs after the old sample is torn down but before the new one
-  // mounts, so each sample's overlay UI lifecycle stays clean.
-  playground.load(sample, () => renderOverlay(sample));
-}
-
-buildSidebar();
-window.addEventListener("hashchange", route);
-
-// Deep-link on load. Honor `?sample=<id>` (the auto-measure URL contract carries the
-// sample in the query, before the hash) so measure runs route to the right sample;
-// otherwise fall back to the hash, then the first sample.
-const requestedSample = new URLSearchParams(location.search).get("sample");
-if (!location.hash && requestedSample) {
-  location.hash = `#/${requestedSample}`;
-} else if (!location.hash) {
-  location.hash = `#/${samples[0]?.id ?? ""}`;
 } else {
-  route();
+  startGallery(canvas, sidebar, overlay);
+}
+
+/** Start the classic WebGL gallery (PR1 baseline path — behaviorally unchanged). */
+function startGallery(
+  canvas: HTMLCanvasElement,
+  sidebar: HTMLElement,
+  overlay: HTMLElement,
+): void {
+  const playground = new Playground(canvas);
+
+  /** Build the left sidebar list from the registry. */
+  function buildSidebar(): void {
+    const heading = document.createElement("h1");
+    heading.textContent = "Babylon Playground";
+    sidebar.appendChild(heading);
+
+    const list = document.createElement("ul");
+    list.className = "sample-list";
+    for (const sample of samples) {
+      const li = document.createElement("li");
+      li.dataset.id = sample.id;
+
+      const title = document.createElement("span");
+      title.className = "sample-title";
+      title.textContent = sample.title;
+      li.appendChild(title);
+
+      const tags = document.createElement("span");
+      tags.className = "sample-tags";
+      tags.textContent = sample.tags.join(" · ");
+      li.appendChild(tags);
+
+      li.addEventListener("click", () => {
+        location.hash = `#/${sample.id}`;
+      });
+      list.appendChild(li);
+    }
+    sidebar.appendChild(list);
+  }
+
+  /** Update the overlay (title + summary) and the active sidebar row. */
+  function renderOverlay(sample: Sample): void {
+    // The previous sample's own overlay UI was already removed by its dispose fn
+    // (run during teardown, before this hook fires), so it is safe to reset here.
+    overlay.innerHTML = "";
+    const title = document.createElement("h2");
+    title.textContent = sample.title;
+    const summary = document.createElement("p");
+    summary.textContent = sample.summary;
+    overlay.appendChild(title);
+    overlay.appendChild(summary);
+
+    sidebar
+      .querySelectorAll("li")
+      .forEach((li) =>
+        li.classList.toggle("active", li.dataset.id === sample.id),
+      );
+  }
+
+  /** Resolve the current hash to a sample and mount it. */
+  function route(): void {
+    const id = location.hash.replace(/^#\/?/, "");
+    const sample = findSample(id) ?? samples[0];
+    if (!sample) return;
+    // beforeMount runs after the old sample is torn down but before the new one
+    // mounts, so each sample's overlay UI lifecycle stays clean.
+    playground.load(sample, () => renderOverlay(sample));
+  }
+
+  buildSidebar();
+  window.addEventListener("hashchange", route);
+
+  // Deep-link on load. Honor `?sample=<id>` (the auto-measure URL contract carries
+  // the sample in the query, before the hash) so measure runs route to the right
+  // sample; otherwise fall back to the hash, then the first sample.
+  const requestedSample = new URLSearchParams(location.search).get("sample");
+  if (!location.hash && requestedSample) {
+    location.hash = `#/${requestedSample}`;
+  } else if (!location.hash) {
+    location.hash = `#/${samples[0]?.id ?? ""}`;
+  } else {
+    route();
+  }
 }

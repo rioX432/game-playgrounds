@@ -1,12 +1,18 @@
-import type { Engine } from "@babylonjs/core/Engines/engine";
+import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine";
 import type { Scene } from "@babylonjs/core/scene";
 
 /**
  * Everything a sample needs to build its world. The engine is shared and
  * long-lived; the scene is created fresh for each sample and disposed on switch.
+ *
+ * Typed as {@link AbstractEngine} (the shared base of WebGL `Engine` and
+ * `WebGPUEngine`, #173) so a sample is engine-backend-agnostic. The gallery's
+ * Playground supplies a concrete WebGL `Engine`; the WebGPU measure path supplies
+ * a `WebGPUEngine`. A sample needing concrete-`Engine`-only methods (e.g. the
+ * pointer-lock helpers in `engine/input.ts`) narrows explicitly.
  */
 export interface SampleContext {
-  engine: Engine;
+  engine: AbstractEngine;
   scene: Scene;
   canvas: HTMLCanvasElement;
 }
