@@ -74,8 +74,13 @@ function route(): void {
 buildSidebar();
 window.addEventListener("hashchange", route);
 
-// Deep-link on load, or default to the first sample.
-if (!location.hash) {
+// Deep-link on load. Honor `?sample=<id>` (the auto-measure URL contract carries the
+// sample in the query, before the hash) so measure runs route to the right sample;
+// otherwise fall back to the hash, then the first sample.
+const requestedSample = new URLSearchParams(location.search).get("sample");
+if (!location.hash && requestedSample) {
+  location.hash = `#/${requestedSample}`;
+} else if (!location.hash) {
   location.hash = `#/${samples[0]?.id ?? ""}`;
 } else {
   route();

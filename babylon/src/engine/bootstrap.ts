@@ -1,5 +1,6 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
+import { runFrameHook } from "../measure/frameHook";
 import type { Sample, SampleContext } from "../samples/types";
 
 /**
@@ -23,6 +24,9 @@ export class Playground {
     });
 
     this.engine.runRenderLoop(() => {
+      // Auto-measure frame hook (no-op unless measure mode installed one). Fired on
+      // the REAL render cadence, just before the scene draws.
+      runFrameHook(performance.now());
       this.currentScene?.render();
     });
 

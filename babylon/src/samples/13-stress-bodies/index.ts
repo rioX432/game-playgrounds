@@ -15,7 +15,13 @@ import "@babylonjs/core/Physics/physicsEngineComponent";
 import { createHavokPlugin } from "../../engine/havok";
 import { createHud } from "../../engine/hud";
 import { createInput } from "../../engine/input";
+import { parseMeasureParams } from "../../measure/config";
+import { setFrameHook } from "../../measure/frameHook";
+import { installRenderSampleSink } from "../../measure/globals";
+import { RenderProbe } from "../../measure/probe";
+import { createRng } from "../../measure/rng";
 import type { Sample, SampleContext } from "../types";
+import { computeSpawnPositions } from "./spawn";
 
 /**
  * 13 — Stress / load harness (Babylon.js + Havok).
@@ -35,8 +41,7 @@ const BOX_HALF = 0.3;
 const BATCH_SIZE = 100;
 const MAX_BODIES = 2000;
 const FLOOR_SIZE = 24;
-const SPAWN_HEIGHT = 10;
-const SPAWN_SPREAD = 4;
+// SPAWN_HEIGHT / SPAWN_SPREAD live in ./spawn (shared with the determinism test).
 
 export const sample13: Sample = {
   id: "13-stress-bodies",
@@ -96,18 +101,22 @@ export const sample13: Sample = {
     // A hidden template box; clones share its geometry + material (cheap spawn).
     let template: Mesh | null = null;
 
-    const addBatch = (): void => {
+    // Always seed the scatter (deterministic even outside measure mode) so a given
+    // seed reproduces an identical run.
+    const params = parseMeasureParams(window.location.search);
+    const rng = createRng(params.seed);
+
+    // Spawn `n` boxes (capped at the safety limit), drawing positions from the
+    // seeded rng so the scatter is reproducible.
+    const spawnBodies = (n: number): void => {
       if (!template) return;
       const room = MAX_BODIES - bodies.length;
-      const n = Math.min(BATCH_SIZE, room);
-      for (let i = 0; i < n; i++) {
+      const count = Math.min(n, room);
+      if (count <= 0) return;
+      for (const p of computeSpawnPositions(count, rng)) {
         const box = template.clone(`box${bodies.length}`, null) as Mesh;
         box.setEnabled(true);
-        box.position.set(
-          (Math.random() - 0.5) * SPAWN_SPREAD,
-          SPAWN_HEIGHT + Math.random() * SPAWN_SPREAD,
-          (Math.random() - 0.5) * SPAWN_SPREAD,
-        );
+        box.position.set(p.x, p.y, p.z);
         const aggregate = new PhysicsAggregate(
           box,
           PhysicsShapeType.BOX,
@@ -117,6 +126,8 @@ export const sample13: Sample = {
         bodies.push({ mesh: box, aggregate });
       }
     };
+
+    const addBatch = (): void => spawnBodies(BATCH_SIZE);
 
     const clearAll = (): void => {
       for (const b of bodies) {
@@ -151,7 +162,32 @@ export const sample13: Sample = {
       template.material = boxMat;
       template.setEnabled(false);
 
-      addBatch(); // seed one batch
+      if (params.measure) {
+        // Auto-measure: spawn the full body count, then drive a RenderProbe off the
+        // engine's real render cadence via the bootstrap frame hook.
+        spawnBodies(params.bodies);
+        const sink = installRenderSampleSink();
+        const probe = new RenderProbe({
+          warmupMs: params.warmupMs,
+          windowMs: params.windowMs,
+          maxWindows: params.maxWindows,
+          meta: {
+            engine: "babylon",
+            backend: "webgl",
+            host: "browser",
+            bodies: params.bodies,
+            seed: params.seed,
+          },
+          onSample: sink,
+        });
+        probe.markStart(performance.now());
+        setFrameHook((now) => {
+          probe.recordFrame(now);
+          if (probe.isDone()) setFrameHook(null);
+        });
+      } else {
+        addBatch(); // seed one batch
+      }
     });
 
     // Per-frame: handle input + refresh the stats readout. Havok steps + syncs
@@ -160,8 +196,12 @@ export const sample13: Sample = {
       const dt = scene.getEngine().getDeltaTime(); // ms
       msPerFrame = msPerFrame === 0 ? dt : msPerFrame * 0.9 + dt * 0.1;
 
-      if (input.consumeJustPressed("Space")) addBatch();
-      if (input.consumeJustPressed("KeyR")) clearAll();
+      // Ignore manual input during a measurement run so a stray keypress can't
+      // corrupt a window (body count is fixed by params.bodies in measure mode).
+      if (!params.measure) {
+        if (input.consumeJustPressed("Space")) addBatch();
+        if (input.consumeJustPressed("KeyR")) clearAll();
+      }
 
       const fps = msPerFrame > 0 ? 1000 / msPerFrame : 0;
       stats.textContent = `bodies: ${bodies.length}  |  ${msPerFrame.toFixed(1)} ms/frame  (~${Math.round(fps)} FPS)`;
@@ -169,6 +209,7 @@ export const sample13: Sample = {
 
     return () => {
       disposed = true;
+      setFrameHook(null); // detach the measure hook if this sample installed one
       scene.onBeforeRenderObservable.remove(observer);
       input.dispose();
       hud.dispose();
