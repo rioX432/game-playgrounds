@@ -34,6 +34,7 @@ use bevy_replicon_renet::RepliconRenetPlugins;
 
 pub mod bots;
 pub mod client;
+pub mod client_render;
 pub mod conditioner;
 pub mod config;
 pub mod interpolation;
@@ -83,6 +84,39 @@ pub fn build_server_app() -> App {
     app.add_plugins(StatesPlugin);
     add_replication_plugins(&mut app);
     app.add_plugins((protocol::NetProtocolPlugin, server::NetServerSimPlugin));
+    app
+}
+
+/// A headless authoritative server WITH bots active — the #168 loaded-server
+/// harness, the native analogue of the web `dev:server:loaded`. It runs the NORMAL
+/// N1 authority ([`server::NetServerSimPlugin`]) plus a seeded bot ramp held at
+/// `bot_count`, at the given `tick_rate` (clamped to the supported band). The
+/// windowed `--client` (carrying the render probe) connects to it to measure client
+/// render performance under bot-driven sync load.
+///
+/// This is strictly ADDITIVE: it reuses the N1 systems and the existing seeded
+/// [`bots`] ramp unchanged, and does NOT touch the locked `MetricsSample` /
+/// `metrics.jsonl` path, replication semantics, tick scheduling, or bot seed
+/// semantics (no metrics or conditioner are wired here — a render-probe run measures
+/// the CLIENT, not the server). The renet endpoint is bound separately via
+/// [`start_server`], same as [`build_server_app`].
+pub fn build_loaded_server_app(tick_rate: f64, seed: u32, bot_count: usize) -> App {
+    let tick = tick_rate.clamp(config::MIN_TICK_RATE, config::MAX_TICK_RATE);
+    let tick_wait = Duration::from_secs_f64(1.0 / tick);
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(tick_wait)));
+    app.add_plugins(StatesPlugin);
+    add_replication_plugins(&mut app);
+    app.add_plugins((protocol::NetProtocolPlugin, server::NetServerSimPlugin));
+    // Override the N1 default fixed tick with the configured one.
+    app.insert_resource(Time::<Fixed>::from_hz(tick));
+    // Seeded bot ramp held at `bot_count` (server-internal replicated entities) —
+    // the SAME systems the N2 probe uses. `drive_bots` must write each bot's input
+    // BEFORE `server_step` integrates it (they conflict on `LatestInput`).
+    app.insert_resource(bots::BotTarget(bot_count));
+    app.insert_resource(bots::BotRng(rng::Rng::new(seed)));
+    app.add_systems(Update, bots::ramp_bots);
+    app.add_systems(FixedUpdate, bots::drive_bots.before(server::server_step));
     app
 }
 
