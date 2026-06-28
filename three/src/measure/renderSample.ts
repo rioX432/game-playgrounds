@@ -12,10 +12,27 @@ import { percentileNearestRank } from "./percentile";
 /** Which standalone render engine produced the sample. */
 export type RenderEngine = "three" | "babylon";
 
+/**
+ * GPU backend the frames were actually drawn on. `"webgl"` is WebGL2 — either the
+ * classic `WebGLRenderer` (PR1) OR `WebGPURenderer`'s WebGL2 fallback backend (PR2);
+ * the {@link RenderSample.renderer} field disambiguates which.
+ */
+export type RenderBackend = "webgl" | "webgpu";
+
+/**
+ * Which Three renderer family produced the sample. PR1's classic `WebGLRenderer`
+ * baseline (`three-webgl-classic`) and PR2's `WebGPURenderer` paths (`three-webgpu`,
+ * on either backend) are DIFFERENT code paths and must never be cross-compared as the
+ * same "WebGL" number — see docs/web-on-steam/PR0-webgpu-availability.md §re-baseline.
+ */
+export type RenderRenderer = "three-webgl-classic" | "three-webgpu";
+
 /** One auto-measure window. Emitted as one JSONL line per closed window. */
 export interface RenderSample {
   engine: RenderEngine;
-  backend: "webgl";
+  /** Renderer family — distinguishes PR1's classic path from PR2's WebGPURenderer. */
+  renderer: RenderRenderer;
+  backend: RenderBackend;
   host: "browser";
   /** Number of dynamic bodies in the scene during the window. */
   bodies: number;
@@ -43,7 +60,7 @@ export const LONG_FRAME_THRESHOLD_MS = 50;
 /** The identity fields a caller stamps onto each sample verbatim. */
 export type RenderSampleMeta = Pick<
   RenderSample,
-  "engine" | "backend" | "host" | "bodies" | "seed"
+  "engine" | "renderer" | "backend" | "host" | "bodies" | "seed"
 >;
 
 /** Milliseconds per second — keep the fps math out of magic numbers. */
