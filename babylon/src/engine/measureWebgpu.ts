@@ -10,8 +10,12 @@
 // Unlike three (#172), there is NO dual-module-graph hazard: `Engine` and
 // `WebGPUEngine` both come from `@babylonjs/core`, so this is a plain async branch.
 // Importing the `WebGPUEngine` class side-effect-loads all its WebGPU subsystems
-// (engine.alpha/renderTarget/query/…). `StandardMaterial` lazily `import()`s its
-// WGSL shaders on first compile, so no explicit shader side-effect import is needed.
+// (engine.alpha/renderTarget/query/…). StandardMaterial's existing GLSL shaders are
+// transpiled to WGSL at runtime via twgsl, which CreateAsync/initAsync fetches from the
+// Babylon CDN — so no extra shader side-effect import is needed, but WebGPU here carries
+// a runtime network dependency (a twgsl load failure throws and is caught in main.ts,
+// never silently mislabeled). Verified rendering non-blank via a real-GPU
+// `?renderer=webgpu` smoke (Apple M3 Pro / macOS 26).
 
 import { WebGPUEngine } from "@babylonjs/core/Engines/webgpuEngine";
 import { Scene } from "@babylonjs/core/scene";
@@ -25,7 +29,11 @@ import {
   setupStressVisuals,
 } from "../samples/13-stress-bodies/stressScene";
 
-/** Matches the gallery `Engine` options so AA/stencil don't confound the numbers. */
+/**
+ * AA + stencil matched to the gallery `Engine` so they don't confound the numbers.
+ * (The gallery also sets `preserveDrawingBuffer`, a WebGL-only option with no
+ * rendering-cost effect under WebGPU, so it is intentionally omitted here.)
+ */
 const ENGINE_OPTIONS = { antialias: true, stencil: true } as const;
 
 /**
@@ -63,7 +71,17 @@ export async function runWebgpuMeasure(
   const { boxMat } = setupStressVisuals(scene, canvas);
   const rng = createRng(params.seed);
   // Dedicated measure page: nothing tears this down mid-load, so never aborted.
-  const world = await enableStressPhysics(scene, boxMat, rng, () => false);
+  let world: Awaited<ReturnType<typeof enableStressPhysics>>;
+  try {
+    world = await enableStressPhysics(scene, boxMat, rng, () => false);
+  } catch (err) {
+    // Havok WASM fetch/compile (or any setup) failed AFTER the GPU device was created
+    // — free the device + scene before rethrowing so a terminal error doesn't leak the
+    // WebGPUEngine. (main.ts surfaces the rethrown error.)
+    scene.dispose();
+    engine.dispose();
+    throw err;
+  }
   if (!world) {
     // Defensive: enableStressPhysics only returns null when aborted, which cannot
     // happen here. Surface it rather than spin an empty loop.
