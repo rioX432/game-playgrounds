@@ -15,7 +15,12 @@ npm run dist                           # package to .exe / .dmg / AppImage
 ```
 
 - `main.cjs` — the Electron main process; loads `WEB_DIST/index.html` (defaults
-  to `three/dist`).
+  to `three/dist`). Honours `MEASURE_QUERY` (a `?sample=...&measure=1&...` search
+  string) for the web-on-steam Layer-2 host-overhead runs.
+- `measure.mjs` — host-overhead measurement runner (web-on-steam #174): launches this
+  shell across a body-count ramp over CDP, harvests `window.__renderSamples`, and records
+  process-tree RAM + cold-start. Procedure + results:
+  [`../../net/measurements/web-on-steam/README.md`](../../net/measurements/web-on-steam/README.md).
 - The web build MUST be produced with a relative base (`npm run build -- --base=./`)
   so `file://` resolves Vite's asset URLs.
 
