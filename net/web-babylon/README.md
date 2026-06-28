@@ -120,6 +120,117 @@ frames to blend.
 - The reproducible measurement numbers live in the server's `metrics.jsonl`;
   this HUD is for real-machine confirmation only (net/CLAUDE.md).
 
+## Client-render probe (#167) — render perf under net load
+
+This client doubles as the **Babylon.js render-under-load probe** for the chapter
+— the sibling of the three.js probe (#166). With `?probe=1` it collects RAW
+per-frame deltas into fixed wall-clock windows and, via the **shared #165 sampler**
+(`net-protocol` → `aggregateRenderWindow`), emits one **`ClientRenderSample`**
+per kept window into a sidecar `client-render.jsonl`.
+
+**three ≠ babylon is the whole point.** Server-side metrics are shared (one
+Colyseus server, so they were a "copy" for babylon — §8.1), but **render** perf is
+per-engine: this probe is an INDEPENDENT measurement, not a copy of the three
+numbers. It copies the three PROBE PATTERN, not the data.
+
+### Where the raw dt comes from (the babylon delta)
+
+Babylon's render loop is rAF-driven but its `runRenderLoop` callback receives no
+timestamp, so `main.ts` reads `performance.now()` once per frame as the RAW frame
+timestamp (the babylon analogue of three's rAF `now`) and feeds it to
+`renderProbe.recordFrame(...)`. The probe derives its own raw per-frame delta from
+those timestamps. Babylon's built-in `engine.getFps()` is a smoothed EMA used for
+the HUD **display only** and is **never** fed to the sampler — feeding it would
+smear the p95 tail (the babylon analogue of three's HUD-EMA trap, Codex #165 rule).
+`engine` is fixed to `babylon` in code (not a param); `measurementBasis` is always
+`web-raf-dt` (same basis as three — both are browser rAF deltas).
+
+The probe is OFF for ordinary play. Files: `src/render/renderProbe.ts` (pure
+batching + sampler glue, headless-tested), `src/render/renderProbeConfig.ts`
+(URL-param parsing, headless-tested), `src/render/probeGlobals.ts` (browser
+harvest hooks). They mirror `net/web-three/src/render/*` one-for-one.
+
+### Join-key parameters (URL query)
+
+The probe is **parameterized** so its sample join keys line up with a server
+bot-ramp `metrics.jsonl` stage. All are query params on the page URL:
+
+| Param | Meaning | Default |
+|-------|---------|---------|
+| `probe` | `1` enables the probe | (off) |
+| `scenario` | join key, e.g. `n2-stress-ramp` | `n2-stress-ramp` |
+| `seed` | RNG seed join key | `12345` |
+| `tickRate` | server tick Hz join key | `20` |
+| `botCount` | bot stage join key (`2`/`24`/`100`) | `24` |
+| `clientCount` | connected real clients join key | `1` |
+| `clientIndex` | which real client (0-based) | `0` |
+| `delayCtoSMs` / `delayStoCMs` | injected one-way delay join keys | `0` |
+| `lossPct` | injected loss join key (`max(up,down)`) | `0` |
+| `warmupMs` | settling window excluded before measuring | `2000` |
+| `windowDurationMs` | measurement window length | `5000` |
+| `maxWindows` | stop after this many KEPT windows (`<=0` ⇒ forever) | `3` |
+
+`warmup` excludes connection / scene-setup / first-snapshot / shader-compile
+settling: it starts counting only once the client is connected AND a first
+snapshot has arrived. Throttled windows (a `dt` above the contract's
+`THROTTLE_MAX_MS`, a backgrounded-tab pause) and statistically-weak windows
+(below `MIN_VALID_SAMPLES`) are dropped, never recorded.
+
+**`clientCount` is NOT a render-sample join key.** A probe connects exactly ONE
+real rendering client, so `clientCount=1` is structural (it holds for a real-GPU
+manual run too) and does NOT reproduce the 2-client server stage. Join the sidecar
+onto `metrics.jsonl` on `scenario` / `engine` / `seed` / `tickRate` / `botCount` +
+impairment knobs only; mind the ~1-entity rendered-load delta.
+
+### Driving load: the loaded server
+
+`npm run dev:server` boots an EMPTY room (no bots). Use the loaded-room harness
+(already on main — reused unchanged) which pre-creates ONE labelled `game` room
+with bots via the standard matchmaker; the client's netcode is **unchanged** and
+its plain `joinOrCreate("game")` lands in it, rendering `botCount + 1` entities.
+
+```bash
+cd net/server
+BOT_COUNT=24 SEED=12345 TICK=20 SCENARIO=n2-stress-ramp PORT=2567 \
+  npm run dev:server:loaded
+```
+
+### Measurement mechanism
+
+Two honest options:
+
+**(a) Manual, real-GPU (the honest numbers).** Start the loaded server, then
+`npm run dev`, open the printed dev URL **with the probe query** in a real browser.
+The page exposes `window.__clientRenderSamples` and
+`window.__downloadClientRenderJsonl()` (and `console.log`s each line as
+`[client-render] {…}`). This uses your real GPU, so fps/frame-time are
+representative.
+
+**(b) Playwright smoke (auto, software-WebGL).** `smoke/renderProbe.smoke.mjs`
+loads the built client headless against the loaded server, harvests
+`window.__clientRenderSamples`, and writes the sidecar. **Caveat:** headless
+Chromium renders WebGL via SwiftShader (software), so the absolute numbers are NOT
+a real-GPU result — the pipeline and sample SHAPE are faithful, the magnitudes are
+not. Playwright is intentionally **not** a dependency (keeps `npm install && npm
+run build && npm test` browser-free); install it once to run the smoke. The
+output-path env var is **`RENDER_OUT`** (distinct from the server's `OUT`, which
+carries `MetricsSample` lines — never reuse `OUT` for the client sidecar). The
+default `PROBE_QUERY` already includes `warmupMs`/`windowDurationMs`/`maxWindows`
+matching the committed sample, so a bare-default run reproduces the artifact.
+
+```bash
+cd net/server      && BOT_COUNT=24 SEED=12345 TICK=20 PORT=2567 npm run dev:server:loaded   # terminal 1
+cd net/web-babylon && npm run build && npx vite preview --port 4173                          # terminal 2
+cd net/web-babylon && npm i -D playwright   # one-off; NOT a package.json dep
+PREVIEW_URL=http://localhost:4173 \
+  RENDER_OUT=../measurements/n2/web-babylon-client-render.jsonl \
+  npm run smoke:render
+```
+
+A sample headless-smoke run is committed at
+`net/measurements/n2/web-babylon-client-render.jsonl` (labelled software-WebGL in
+that dir's README — replace with a real-GPU manual run for honest magnitudes).
+
 ## Scope (Won't Do here)
 
 - No client-side prediction / reconciliation (N1 is low-twitch by design).

@@ -38,13 +38,22 @@ not a WAN or viral-scale benchmark.**
 
 ## Client-render sidecar (`*-client-render.jsonl`, #165 contract)
 
-`web-three-client-render.jsonl` holds **per-client render performance** (fps +
-frame-time p50/p95) under net load — one `ClientRenderSample`
-(`net/protocol/src/clientRender.ts`) per measurement window. It is a **sidecar**,
-not a `MetricsSample` row: it LEFT JOINs onto the server `metrics.jsonl` above on
-the shared join keys (`scenario` / `engine` / `seed` / `tickRate` / `botCount` +
-impairment knobs). `measurementBasis` is `web-raf-dt` (web rAF deltas; a §8.2
-parity gap vs Bevy frame diagnostics — do NOT cross-compare magnitudes).
+`web-three-client-render.jsonl` (#166) and `web-babylon-client-render.jsonl` (#167)
+hold **per-client render performance** (fps + frame-time p50/p95) under net load —
+one `ClientRenderSample` (`net/protocol/src/clientRender.ts`) per measurement
+window. They are **sidecars**, not `MetricsSample` rows: each LEFT JOINs onto the
+server `metrics.jsonl` above on the shared join keys (`scenario` / `engine` /
+`seed` / `tickRate` / `botCount` + impairment knobs). `measurementBasis` is
+`web-raf-dt` (web rAF deltas; a §8.2 parity gap vs Bevy frame diagnostics — do NOT
+cross-compare magnitudes).
+
+**three vs babylon here is a REAL comparison, not a copy.** Server-side metrics are
+identical because three and babylon share one Colyseus server (§8.1), but **render**
+perf is per-engine — the two `*-client-render.jsonl` files are independent
+measurements of the SAME scenario/seed/tick under the SAME bot load. Both probes
+sample RAW per-frame rAF deltas through the shared #165 sampler (three feeds rAF
+`now`; babylon reads `performance.now()` per `runRenderLoop` frame — never the
+smoothed `engine.getFps()` EMA), so their magnitudes are directly comparable.
 
 **HONEST CAVEAT — this committed run is a headless software-WebGL smoke**, not a
 real-GPU result. Headless Chromium renders WebGL through SwiftShader, so the
@@ -71,4 +80,16 @@ PREVIEW_URL=http://localhost:4173 \
   PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3' \
   RENDER_OUT=../measurements/n2/web-three-client-render.jsonl \
   npm run smoke:render
+
+# Babylon sidecar (#167): SAME loaded server, SAME join keys — swap the client dir.
+# `RENDER_OUT` (not OUT) keeps the client sidecar separate from the server's OUT.
+cd net/web-babylon && npm run build && npx vite preview --port 4173 &
+cd net/web-babylon && npm i -D playwright   # one-off; NOT a package.json dep
+PREVIEW_URL=http://localhost:4173 \
+  RENDER_OUT=../measurements/n2/web-babylon-client-render.jsonl \
+  npm run smoke:render   # default PROBE_QUERY already matches the committed window params
 ```
+
+Both committed sidecars are **headless software-WebGL smokes** (SwiftShader),
+labelled as such above; for honest magnitudes replace either with a real-GPU
+manual run (`net/web-{three,babylon}/README.md` → "Client-render probe").
