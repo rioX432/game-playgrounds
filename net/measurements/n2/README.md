@@ -35,3 +35,40 @@ cross-compared naively (`bytesUp/DownPerSec` = JSON vs postcard, `transportBytes
 but Bevy transport RTT does not). The full gap table is in `net/bevy/CLAUDE.md`
 → "Honest-parity", summarized in COMPARISON.md §8.2. **Single-machine / localhost;
 not a WAN or viral-scale benchmark.**
+
+## Client-render sidecar (`*-client-render.jsonl`, #165 contract)
+
+`web-three-client-render.jsonl` holds **per-client render performance** (fps +
+frame-time p50/p95) under net load — one `ClientRenderSample`
+(`net/protocol/src/clientRender.ts`) per measurement window. It is a **sidecar**,
+not a `MetricsSample` row: it LEFT JOINs onto the server `metrics.jsonl` above on
+the shared join keys (`scenario` / `engine` / `seed` / `tickRate` / `botCount` +
+impairment knobs). `measurementBasis` is `web-raf-dt` (web rAF deltas; a §8.2
+parity gap vs Bevy frame diagnostics — do NOT cross-compare magnitudes).
+
+**HONEST CAVEAT — this committed run is a headless software-WebGL smoke**, not a
+real-GPU result. Headless Chromium renders WebGL through SwiftShader, so the
+absolute `clientFps` / frame-time magnitudes are software-rendered. The pipeline
+and sample SHAPE are faithful; the magnitudes are not. For real-GPU numbers,
+follow the **manual** procedure in `net/web-three/README.md` → "Client-render probe".
+
+**`clientCount:1` is structural, not a smoke artifact.** A client-render probe
+connects exactly ONE real rendering client (plus the server's bot-driven load), so
+`clientCount=1` holds for the real-GPU manual path too — it does NOT reproduce the
+2-client server stage (`web-stress.jsonl` `n2-stress-ramp` has `clientCount:2`).
+That is why `clientCount` is deliberately omitted from the join key list above:
+join on `scenario` / `engine` / `seed` / `tickRate` / `botCount` + impairment knobs
+only. Mind also the ~1-entity rendered-load delta (1+bots here vs 2+bots there).
+
+```bash
+# Server: a loaded n2-stress-ramp stage (24 bots), same seed/tick as web-stress.jsonl.
+cd net/server && BOT_COUNT=24 SEED=12345 TICK=20 SCENARIO=n2-stress-ramp PORT=2567 \
+  npm run dev:server:loaded
+# Client: build + preview, then harvest via the Playwright smoke (software-WebGL).
+cd net/web-three && npm run build && npx vite preview --port 4173 &
+cd net/web-three && npm i -D playwright   # one-off; NOT a package.json dep
+PREVIEW_URL=http://localhost:4173 \
+  PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3' \
+  RENDER_OUT=../measurements/n2/web-three-client-render.jsonl \
+  npm run smoke:render
+```
