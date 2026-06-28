@@ -17,6 +17,9 @@ import { INPUT_HZ } from "./config";
 import { Hud } from "./hud";
 import { KeyboardInput } from "./net/input";
 import { NetClient } from "./net/netClient";
+import { installProbeGlobals } from "./render/probeGlobals";
+import { RenderProbe } from "./render/renderProbe";
+import { parseRenderProbeParams } from "./render/renderProbeConfig";
 import { createScene } from "./render/scene";
 import { PlayerViews } from "./render/players";
 
@@ -40,6 +43,22 @@ void net.connect();
 const input = new KeyboardInput();
 input.attach(window);
 
+// Client-render probe (#167) — OFF unless `?probe=1`. When on, it collects RAW
+// per-frame deltas (NOT Babylon's `engine.getFps()` EMA) into fixed wall-clock
+// windows and emits one `ClientRenderSample` per kept window via the #165 shared
+// sampler. Its join keys come from URL params so they line up with a server
+// bot-ramp metrics.jsonl. Mirrors the three probe (#166); engine = babylon.
+const probeParams = parseRenderProbeParams(window.location.search);
+const renderProbe = probeParams.enabled
+  ? new RenderProbe({
+      keys: probeParams.keys,
+      sink: installProbeGlobals(window),
+      warmupMs: probeParams.warmupMs,
+      windowDurationMs: probeParams.windowDurationMs,
+      maxWindows: probeParams.maxWindows,
+    })
+  : null;
+
 // Fixed-rate input pump, decoupled from render and from the server tick.
 const inputTimer = window.setInterval(() => {
   const s = input.sample();
@@ -47,6 +66,20 @@ const inputTimer = window.setInterval(() => {
 }, MS_PER_SEC / INPUT_HZ);
 
 engine.runRenderLoop(() => {
+  // Babylon's render loop is rAF-driven but its callback gets no timestamp, so we
+  // read `performance.now()` once per frame as the RAW frame timestamp — the
+  // babylon analogue of three's rAF `now`. The probe derives its own raw delta
+  // from it; `engine.getFps()` below is a smoothed EMA for DISPLAY only and must
+  // never reach the sampler (#165 contract). Mark ready once connected AND a
+  // first snapshot has arrived (warmup starts from there).
+  if (renderProbe) {
+    const now = performance.now();
+    if (net.status === "connected" && net.syncedCount > 0) {
+      renderProbe.markReady(now);
+    }
+    renderProbe.recordFrame(now);
+  }
+
   players.sync(net.sample(), net.selfId);
 
   hud.update({
@@ -55,7 +88,7 @@ engine.runRenderLoop(() => {
     syncedCount: net.syncedCount,
     rttMs: net.rttMs,
     snapshotAgeMs: net.snapshotAgeMs,
-    // Babylon's built-in smoothed frame-rate estimate.
+    // Babylon's built-in smoothed frame-rate estimate (display only).
     fps: engine.getFps(),
   });
 
