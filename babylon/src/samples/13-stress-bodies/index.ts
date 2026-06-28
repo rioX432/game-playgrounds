@@ -196,8 +196,12 @@ export const sample13: Sample = {
       const dt = scene.getEngine().getDeltaTime(); // ms
       msPerFrame = msPerFrame === 0 ? dt : msPerFrame * 0.9 + dt * 0.1;
 
-      if (input.consumeJustPressed("Space")) addBatch();
-      if (input.consumeJustPressed("KeyR")) clearAll();
+      // Ignore manual input during a measurement run so a stray keypress can't
+      // corrupt a window (body count is fixed by params.bodies in measure mode).
+      if (!params.measure) {
+        if (input.consumeJustPressed("Space")) addBatch();
+        if (input.consumeJustPressed("KeyR")) clearAll();
+      }
 
       const fps = msPerFrame > 0 ? 1000 / msPerFrame : 0;
       stats.textContent = `bodies: ${bodies.length}  |  ${msPerFrame.toFixed(1)} ms/frame  (~${Math.round(fps)} FPS)`;

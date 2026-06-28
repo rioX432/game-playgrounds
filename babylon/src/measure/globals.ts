@@ -15,7 +15,7 @@ export const RENDER_SAMPLE_LOG_PREFIX = "[render-sample]";
 
 declare global {
   interface Window {
-    /** Append-only array of emitted auto-measure samples (a smoke polls it). */
+    /** Samples emitted since the last sink install (a smoke polls it). */
     __renderSamples?: RenderSample[];
   }
 }
@@ -27,7 +27,9 @@ declare global {
  * purity.
  */
 export function installRenderSampleSink(): (sample: RenderSample) => void {
-  const samples: RenderSample[] = (window.__renderSamples ??= []);
+  // Reset on install so each measure-mode mount starts with a clean sidecar
+  // (a re-mount without page reload won't mix in a previous run's samples).
+  const samples: RenderSample[] = (window.__renderSamples = []);
   return (sample) => {
     samples.push(sample);
     console.log(`${RENDER_SAMPLE_LOG_PREFIX} ${JSON.stringify(sample)}`);

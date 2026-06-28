@@ -190,8 +190,12 @@ const sample: Sample = {
       // EMA so the readout is stable rather than jittering every frame.
       msPerFrame = msPerFrame === 0 ? dt : msPerFrame * 0.9 + dt * 0.1;
 
-      if (input.consumeJustPressed("Space")) addBatch();
-      if (input.consumeJustPressed("KeyR")) clearAll();
+      // Ignore manual input during a measurement run so a stray keypress can't
+      // corrupt a window (body count is fixed by params.bodies in measure mode).
+      if (!params.measure) {
+        if (input.consumeJustPressed("Space")) addBatch();
+        if (input.consumeJustPressed("KeyR")) clearAll();
+      }
 
       world.step();
       for (const b of bodies) {
