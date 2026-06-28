@@ -498,6 +498,10 @@ Mirrors §7 — scope honesty is the point of the chapter.
 - **No client-render-under-load cross-engine numbers** in this chapter — that is N1 /
   chapter 1's axis (three vs. babylon render); §8's server-side numbers are identical
   across the two web clients on purpose.
-- **No voice / audio chat.** Real-time audio is a **later chapter**, not measured here.
+- **No voice / audio chat — and not a later chapter either.** Real-time voice
+  differentiates *transport topology* (WebRTC mesh vs. SFU vs. raw-over-datachannel)
+  and *platform* (browser WebRTC vs. native `webrtc-rs`), **not the three render
+  engines** — so it fails the Core Value one-step test and is now a **Won't Do**
+  (see root `CLAUDE.md`; supersedes the earlier "later chapter" note). Issue #161.
 - **Bytes are not wire-comparable across engines** (JSON vs postcard; estimate vs real
   renet bytes) — see §8.2; only intra-stack scaling is meaningful.
