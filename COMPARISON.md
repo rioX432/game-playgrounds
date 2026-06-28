@@ -262,8 +262,12 @@ fix (`process.resourcesPath`).
 
 ## 7. What this comparison does NOT establish
 
-- **No load/perf benchmark** (§5) — light scenes only.
-- **No packaged build** — Steam path is researched, not done.
+- **Load/perf is now measured** (§5) but single-machine / single-run, with
+  physics-vs-draw cost not separated and **no WebGPU path** — so it bounds the
+  WebGL-vs-native ladder, not the full `WebGL < WebGPU < native` staircase.
+- **Steam path exercised** (§6) — Electron shell + native build run locally; the
+  **actual store upload is blocked on credentials**, so end-to-end shipping is
+  not validated.
 - **No networking/multiplayer** — *was* out of scope here; now its own chapter (§8,
   `net/`). This §7 still scopes only the single-machine comparison above.
 - **No hand-made art** — primitives/procedural only, so this says nothing about
@@ -282,11 +286,15 @@ For light, single-machine, PC/Steam-first mechanics:
 - **Most correctness-by-construction →** Bevy, if you can absorb the compile
   times (and the subdir is tuned to minimize them).
 - **Feel →** a wash; it lives in your tuning, so don't let it decide.
-- **Performance ceiling →** Bevy, but unproven here and irrelevant until a game is
-  actually heavy.
+- **Performance ceiling →** Bevy — now measured (§5): native holds the 120 Hz cap
+  at 2000 bodies (~160 fps uncapped) while the WebGL engines fall off it. Still
+  **no WebGPU path measured**, which could lift the web ceiling.
 
-The next high-value step is a **stress/perf sample** across all three to turn §5
-from "fine, probably" into numbers.
+The next high-value step is to close the staircase's missing middle: measure a
+**WebGPU path** (Three's `WebGPURenderer` / Babylon's `WebGPUEngine`) together with
+the **Electron/Tauri distribution overhead** of shipping a web engine to Steam.
+Only together do they answer whether web is enough for PC/Steam, or whether Bevy's
+ceiling actually pays off.
 
 ---
 
