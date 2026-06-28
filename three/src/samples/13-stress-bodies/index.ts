@@ -3,7 +3,13 @@ import { BoxGeometry, Color, Mesh, MeshStandardMaterial } from "three";
 import { Hud } from "../../engine/hud";
 import { InputController } from "../../engine/input";
 import { createGround, createLightPreset } from "../../engine/scene";
+import { parseMeasureParams } from "../../measure/config";
+import { setFrameHook } from "../../measure/frameHook";
+import { installRenderSampleSink } from "../../measure/globals";
+import { RenderProbe } from "../../measure/probe";
+import { createRng } from "../../measure/rng";
 import type { Sample, SampleContext } from "../types";
+import { computeSpawnPositions } from "./spawn";
 
 /**
  * 13 — Stress / load harness (Three.js + Rapier).
@@ -30,8 +36,7 @@ const BOX_HALF = 0.3;
 const BATCH_SIZE = 100; // boxes added per Space press
 const MAX_BODIES = 2000; // safety cap (memory + the gallery stays responsive)
 const FLOOR_HALF = 12;
-const SPAWN_HEIGHT = 10; // boxes drop from here
-const SPAWN_SPREAD = 4; // horizontal jitter of the spawn cluster
+// SPAWN_HEIGHT / SPAWN_SPREAD live in ./spawn (shared with the determinism test).
 
 interface Body {
   mesh: Mesh;
@@ -98,16 +103,21 @@ const sample: Sample = {
     let msPerFrame = 0; // exponential moving average of frame time
     let last = performance.now();
 
-    const addBatch = (): void => {
+    // Always seed the scatter (deterministic even outside measure mode) so a given
+    // seed reproduces an identical run.
+    const params = parseMeasureParams(window.location.search);
+    const rng = createRng(params.seed);
+
+    // Spawn `n` boxes (capped at the safety limit), drawing positions from the
+    // seeded rng so the scatter is reproducible.
+    const spawnBodies = (n: number): void => {
       if (!world) return;
       const room = MAX_BODIES - bodies.length;
-      const n = Math.min(BATCH_SIZE, room);
-      for (let i = 0; i < n; i++) {
-        const x = (Math.random() - 0.5) * SPAWN_SPREAD;
-        const z = (Math.random() - 0.5) * SPAWN_SPREAD;
-        const y = SPAWN_HEIGHT + Math.random() * SPAWN_SPREAD;
+      const count = Math.min(n, room);
+      if (count <= 0) return;
+      for (const p of computeSpawnPositions(count, rng)) {
         const rb = world.createRigidBody(
-          RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z),
+          RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, p.y, p.z),
         );
         world.createCollider(
           RAPIER.ColliderDesc.cuboid(BOX_HALF, BOX_HALF, BOX_HALF).setRestitution(
@@ -120,6 +130,8 @@ const sample: Sample = {
         bodies.push({ mesh, rb });
       }
     };
+
+    const addBatch = (): void => spawnBodies(BATCH_SIZE);
 
     const clearAll = (): void => {
       for (const b of bodies) {
@@ -140,7 +152,32 @@ const sample: Sample = {
           RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0),
         ),
       );
-      addBatch(); // seed with one batch so something is happening on entry
+      if (params.measure) {
+        // Auto-measure: spawn the full body count, then drive a RenderProbe off the
+        // engine's real render cadence via the bootstrap frame hook.
+        spawnBodies(params.bodies);
+        const sink = installRenderSampleSink();
+        const probe = new RenderProbe({
+          warmupMs: params.warmupMs,
+          windowMs: params.windowMs,
+          maxWindows: params.maxWindows,
+          meta: {
+            engine: "three",
+            backend: "webgl",
+            host: "browser",
+            bodies: params.bodies,
+            seed: params.seed,
+          },
+          onSample: sink,
+        });
+        probe.markStart(performance.now());
+        setFrameHook((now) => {
+          probe.recordFrame(now);
+          if (probe.isDone()) setFrameHook(null);
+        });
+      } else {
+        addBatch(); // seed with one batch so something is happening on entry
+      }
       raf = requestAnimationFrame(step);
     });
 
@@ -171,6 +208,7 @@ const sample: Sample = {
 
     return () => {
       disposed = true;
+      setFrameHook(null); // detach the measure hook if this sample installed one
       cancelAnimationFrame(raf);
       input.dispose();
       hud.dispose();
