@@ -72,3 +72,21 @@ moves them by only a couple MB — measured once on three and noted, not re-pack
   (CLAUDE.md "Won't Do": no real-scale / viral-load infra).
 - **WebGPU in Electron = GO** (bundled Chromium 130), unlike Tauri's OS-gated WKWebView
   path — see `docs/web-on-steam/PR0-webgpu-availability.md`.
+
+## Tauri (Layer 2, second host) — #175
+
+The Tauri shell (`packaging/tauri/`) is the lightweight counterpart. Measured on the same
+machine; full notes in `packaging/tauri/README.md`. Headline results vs Electron:
+
+| Metric | Electron | Tauri |
+|---|---|---|
+| Installed footprint (`.app`) | 237 MB | **5.0 MB** (~47× smaller — system WKWebView, no bundled browser) |
+| WebGPU | GO (bundled Chromium 130, any macOS) | **GO** (`navigator.gpu===true` in the real release WKWebView) but **macOS-26+ only** + release-build-only (tauri#6381) |
+| Web-content RAM | app-owned process tree (main+renderer+GPU+helpers), ~485–615 MB | app proc ~104 MB **+ shared launchd-owned `com.apple.WebKit.*` XPC services** — NOT a comparable process tree |
+| Frame-time (rAF) | captured (Chromium window foregrounds reliably) | **NOT captured** — WKWebView throttles rAF/timers while the window is occluded/not-frontmost; the window stayed `visibilityState:"hidden"` in this automated session |
+
+**Honest gap:** Tauri frame-time parity is not established here — WKWebView's occlusion
+throttling blocks automated/headless capture (an attended, truly-foregrounded run would be
+needed). The IPC measurement harness (`packaging/tauri/src/main.rs`) is in place for that.
+This throttling, and the shared-XPC RAM model, are themselves distribution-relevant
+differences from Electron, not just measurement nuisances.
