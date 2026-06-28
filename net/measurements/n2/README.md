@@ -35,3 +35,33 @@ cross-compared naively (`bytesUp/DownPerSec` = JSON vs postcard, `transportBytes
 but Bevy transport RTT does not). The full gap table is in `net/bevy/CLAUDE.md`
 → "Honest-parity", summarized in COMPARISON.md §8.2. **Single-machine / localhost;
 not a WAN or viral-scale benchmark.**
+
+## Client-render sidecar (`*-client-render.jsonl`, #165 contract)
+
+`web-three-client-render.jsonl` holds **per-client render performance** (fps +
+frame-time p50/p95) under net load — one `ClientRenderSample`
+(`net/protocol/src/clientRender.ts`) per measurement window. It is a **sidecar**,
+not a `MetricsSample` row: it LEFT JOINs onto the server `metrics.jsonl` above on
+the shared join keys (`scenario` / `engine` / `seed` / `tickRate` / `botCount` +
+impairment knobs). `measurementBasis` is `web-raf-dt` (web rAF deltas; a §8.2
+parity gap vs Bevy frame diagnostics — do NOT cross-compare magnitudes).
+
+**HONEST CAVEAT — this committed run is a headless software-WebGL smoke**, not a
+real-GPU result. Headless Chromium renders WebGL through SwiftShader, so the
+absolute `clientFps` / frame-time magnitudes are software-rendered (note the
+`clientCount:1`, single headless renderer). The pipeline and sample SHAPE are
+faithful; the magnitudes are not. For real-GPU numbers, follow the **manual**
+procedure in `net/web-three/README.md` → "Client-render probe".
+
+```bash
+# Server: a loaded n2-stress-ramp stage (24 bots), same seed/tick as web-stress.jsonl.
+cd net/server && BOT_COUNT=24 SEED=12345 TICK=20 SCENARIO=n2-stress-ramp PORT=2567 \
+  npm run dev:server:loaded
+# Client: build + preview, then harvest via the Playwright smoke (software-WebGL).
+cd net/web-three && npm run build && npx vite preview --port 4173 &
+cd net/web-three && npm i -D playwright   # one-off; NOT a package.json dep
+PREVIEW_URL=http://localhost:4173 \
+  PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3' \
+  OUT=../measurements/n2/web-three-client-render.jsonl \
+  npm run smoke:render
+```
