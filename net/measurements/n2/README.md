@@ -93,3 +93,34 @@ PREVIEW_URL=http://localhost:4173 \
 Both committed sidecars are **headless software-WebGL smokes** (SwiftShader),
 labelled as such above; for honest magnitudes replace either with a real-GPU
 manual run (`net/web-{three,babylon}/README.md` → "Client-render probe").
+
+### Bevy native sidecar (`bevy-client-render.jsonl`, #168)
+
+The native equivalent: the windowed Bevy client's render perf (frame-time p50/p95
++ fps) under bot load, same #165 `ClientRenderSample` shape, with `engine="bevy"`
+and `measurementBasis="bevy-frame-diagnostics"` (RAW `FRAME_TIME` diagnostics, NOT
+a smoothed fps). It LEFT JOINs onto the bevy `metrics.jsonl` on the same keys.
+
+**No `bevy-client-render.jsonl` is committed here — by design, not omission.** The
+Bevy probe needs a real GPU window; this repo's CI/agent environment has none, and
+a headless `MinimalPlugins` run would time the `ScheduleRunner` loop rather than
+real render frames — committing that would be a faked magnitude (Core Value #1).
+The sampler + cross-language parity are headless-tested instead (`cd net/bevy &&
+cargo test`; the shared fixture `net/protocol/src/clientRenderFixtures.json` keeps
+the Rust and TS samplers numerically identical). Produce the honest sidecar with a
+real-GPU manual run:
+
+```bash
+# Terminal 1 — loaded authority (24 bots, same seed/tick as bevy-stress.jsonl):
+cd net/bevy && BOT_COUNT=24 SEED=12345 TICK=20 cargo run -- --server-loaded
+# Terminal 2 — windowed probe client (RENDER_OUT, not OUT):
+cd net/bevy && RENDER_PROBE=1 SCENARIO=n2-stress-ramp SEED=12345 TICK=20 BOT_COUNT=24 \
+  WARMUP_MS=2000 WINDOW_MS=4000 MAX_WINDOWS=3 \
+  RENDER_OUT=../measurements/n2/bevy-client-render.jsonl cargo run -- --client
+```
+
+**Web-vs-bevy magnitudes are NOT cross-comparable** (browser rAF vs native
+window/GPU — a §8.2 parity gap); only the SHAPE under bot load is. Because the
+window is typically **vsync-capped**, frame-time p50/p95 is the PRIMARY metric and
+fps is a ceiling indicator. Full caveats: `net/bevy/CLAUDE.md` → "Client-render
+probe (#168)".
