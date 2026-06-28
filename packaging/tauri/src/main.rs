@@ -3,13 +3,16 @@
 // WKWebView has no Chromium remote-debugging (CDP), so unlike the Electron runner we
 // cannot harvest window.__renderSamples externally. Instead an initialization_script polls
 // the in-page probe and, once the measurement windows are collected, hands the JSON back to
-// Rust over Tauri IPC (`report`), which writes it to REPORT_FILE and exits. The external
-// Node runner (measure.mjs) orchestrates launches and samples the process-tree RAM.
+// Rust over Tauri IPC (`report`), which writes it to the report path and exits. (There is no
+// committed Tauri runner script: WKWebView occlusion-throttles rAF in a headless/automated
+// session, so an *attended* re-run would launch the bundled .app via `open --args` and read
+// the report file — see README.md "Frame-time could not be captured headlessly".)
 //
 // Which web build is embedded is fixed at COMPILE time by tauri.conf.json `frontendDist`
 // (three/dist here); the per-run measure URL (sample/backend/bodies/seed) is injected at
-// RUNTIME via the MEASURE_QUERY env var. A RELEASE build is required for the WebGPU path
-// (tauri#6381: WKWebView WebGPU init fails in Tauri dev builds, works in production).
+// RUNTIME via `--query` argv (env `MEASURE_QUERY` as a fallback). A RELEASE build is required
+// for the WebGPU path (tauri#6381: WKWebView WebGPU init fails in Tauri dev builds, works in
+// production).
 
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
