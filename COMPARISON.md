@@ -503,9 +503,17 @@ Mirrors §7 — scope honesty is the point of the chapter.
   cross-comparable.
 - **Tick-rate optimum is machine-dependent.** The sweep shows the *trend*, not a
   universal best tick.
-- **No client-render-under-load cross-engine numbers** in this chapter — that is N1 /
-  chapter 1's axis (three vs. babylon render); §8's server-side numbers are identical
-  across the two web clients on purpose.
+- **Client-render-under-load: pipeline established (§8.7), real-GPU magnitudes
+  deliberately not.** The measurement *pipeline* now exists and is wired across all
+  three engines — the `ClientRenderSample` sidecar contract, the shared pure sampler,
+  and a checked-in TS↔Rust parity fixture (#166 three / #167 babylon / #168 bevy). What
+  is **still not established** is **real-GPU cross-stack absolute magnitudes**: the
+  committed web sidecars are headless software-WebGL (SwiftShader) smokes, Bevy has no
+  committed sidecar (this environment has no GPU window), and web↔bevy is a §8.2 basis
+  GAP regardless. So only the *shape* of frame-time under load (intra-stack) and the
+  sampler math (true parity) are comparable; absolute render numbers across stacks
+  remain out of scope by design. (§8's server-side numbers are still identical across
+  the two web clients on purpose — that part is unchanged.)
 - **No voice / audio chat — and not a later chapter either.** Real-time voice
   differentiates *transport topology* (WebRTC mesh vs. SFU vs. raw-over-datachannel)
   and *platform* (browser WebRTC vs. native `webrtc-rs`), **not the three render
@@ -513,3 +521,109 @@ Mirrors §7 — scope honesty is the point of the chapter.
   (see root `CLAUDE.md`; supersedes the earlier "later chapter" note). Issue #161.
 - **Bytes are not wire-comparable across engines** (JSON vs postcard; estimate vs real
   renet bytes) — see §8.2; only intra-stack scaling is meaningful.
+
+### 8.7 Client render-under-load — the pipeline, and why magnitudes aren't cross-engine
+
+§8.1–§8.6 are all *server-side / netcode* numbers (tick cost, bytes, RTT, snapshot
+age). This subsection is the other half — **per-client render performance under the
+same N2 load** — and it is deliberately a **pipeline + comparability** writeup, **not
+a results table**, because there are **no real-GPU cross-engine magnitudes to report
+yet** (see "Methodology honesty" below). That absence is the honest state, by design,
+not an omission (Core Value #1). It refines the §8.6 bullet of the same name.
+
+**What it measures.** Per-client **fps + frame-time p50/p95** over a fixed wall-clock
+window while the server runs the N2 bot ramp, recorded as a `ClientRenderSample`
+(`net/protocol/src/clientRender.ts`) — one line per measurement window in a **sidecar**
+`client-render.jsonl`, NOT a field on the server `MetricsSample`. The sidecar carries
+the same join keys as the server line (`scenario` / `engine` / `seed` / `tickRate` /
+`botCount` + impairment knobs) and **LEFT JOINs** onto `metrics.jsonl`. `clientCount`
+is deliberately **excluded** from the join: a render probe connects exactly ONE real
+rendering client (plus the server's bots), so `clientCount=1` is **structural** — it
+does not reproduce the 2-client server stages of §8.4 (mind the ~1-entity
+rendered-load delta). Why a sidecar and not extra `MetricsSample` columns: web fps
+comes from rAF deltas, Bevy fps from frame-time diagnostics — a §8.2-class parity gap —
+so folding them onto every server tick would falsely imply one comparable "client
+truth" exists per tick. It does not. (Rationale: `clientRender.ts` header +
+`net/CLAUDE.md` "metrics.jsonl convention".)
+
+**The three probes.** All reuse the SAME sidecar contract and the SAME pure sampler:
+
+| stack | probe (#) | `measurementBasis` | raw frame-delta source |
+|-------|-----------|--------------------|------------------------|
+| three (`net/web-three`, #166) | `?probe=1` rAF loop | `web-raf-dt` | `requestAnimationFrame` present-to-present dt |
+| babylon (`net/web-babylon`, #167) | `?probe=1` render loop | `web-raf-dt` | `performance.now()` per `runRenderLoop` frame |
+| bevy (`net/bevy`, #168) | windowed `--client` probe | `bevy-frame-diagnostics` | `FRAME_TIME` diagnostic (raw `Time<Real>` delta) |
+
+In all three the raw per-frame deltas pass through one shared pure function —
+`aggregateRenderWindow` (TS) / `aggregate_render_window` (Rust) — that computes fps +
+p50/p95 by a single nearest-rank rule, drops the first frame, excludes
+tab-throttle/suspend deltas (`> THROTTLE_MAX_MS = 250`), and keeps ordinary foreground
+spikes in the p95 tail. The smoothed HUD fps (three/babylon EMA, Bevy `.smoothed()`)
+is **never** fed in — that would smear the tail. The TS and Rust samplers are pinned
+**numerically identical** by a checked-in cross-language parity fixture
+(`net/protocol/src/clientRenderFixtures.json`), asserted by both a TS test and the
+Rust `client_render::tests::matches_shared_parity_fixture`.
+
+**Comparability (the §8.2 (a)/(b) split, applied to render).**
+
+**(a) What IS comparable:**
+
+- The **sampler math** is **true parity** — same fixture, identical fps/percentile
+  output for identical deltas, across TS and Rust. A verified equality, not a claim.
+- The **SHAPE** of frame-time p50/p95 **as `botCount` grows, *within a single
+  stack*** — does a client's frame cost degrade as the synchronized world scales
+  2 → 24 → 100? That trend is meaningful intra-stack.
+- three ↔ babylon is a **real, independent** render comparison (not a server-style
+  "copy"): the two `*-client-render.jsonl` files are separate measurements of the same
+  scenario/seed/tick/bot load through the same sampler — **but only on the same
+  rendering basis** (see (b)).
+
+**(b) What is NOT comparable:**
+
+- **Absolute fps / frame-time across web ↔ bevy** — browser rAF vs native window/GPU +
+  wgpu is a §8.2 measurement-basis **GAP** (`web-raf-dt` vs `bevy-frame-diagnostics`).
+  Never cross-compare those magnitudes; only the shape-under-load is shared.
+- Even **three ↔ babylon absolute magnitudes** are meaningful only on the **same
+  rendering basis**. The illustration below shares one (software-WebGL), so it is
+  same-basis — but it is software-rendered, not a real-GPU verdict.
+- **fps is a ceiling indicator, not throughput.** A windowed/vsync-capped client
+  flattens fps at the refresh rate and hides headroom, so **frame-time p50/p95 is the
+  primary metric** and fps is read as a saturated cap (explicit in `net/bevy/CLAUDE.md`
+  → "vsync caveat").
+
+**Methodology honesty — why there is no real-GPU cross-engine table.** The
+load-bearing caveat:
+
+- The **committed web sidecars are headless software-WebGL (SwiftShader) smokes** —
+  `net/measurements/n2/web-three-client-render.jsonl` and
+  `web-babylon-client-render.jsonl`. Headless Chromium renders WebGL through
+  SwiftShader, so their **fps / frame-time magnitudes are software-rendered, NOT
+  real-GPU**. The pipeline and sample shape are faithful; the magnitudes are not.
+- **Bevy has no committed sidecar at all** — by design, not omission. The windowed
+  probe needs a real GPU window, this environment has none, and a headless
+  `MinimalPlugins` run would time the `ScheduleRunner` loop rather than real render
+  frames; committing that would be a faked magnitude. The sampler + cross-language
+  parity are headless-tested instead (`cd net/bevy && cargo test`).
+- So **real-GPU cross-stack render magnitudes are NOT established in this chapter, by
+  design.** The exact commands to produce honest real-GPU sidecars live in the
+  per-engine READMEs (`net/web-{three,babylon}/README.md` → "Client-render probe") and
+  `net/bevy/CLAUDE.md` → "Manual real-GPU run".
+
+*Illustration only — software-WebGL smoke; shape-not-magnitude; three/babylon
+same-basis only; bevy not yet captured.* The committed web smokes (`n2-stress-ramp`,
+24 bots, tick 20, clean link, `clientCount=1`, 3 windows each), per
+`net/measurements/n2/web-{three,babylon}-client-render.jsonl`:
+
+| stack (software-WebGL smoke, SwiftShader) | `clientFps` | frame-time p50 | frame-time p95 |
+|-------------------------------------------|:-----------:|:--------------:|:--------------:|
+| three | ~74 | ~16.5 ms | ~17 ms |
+| babylon | ~76 | ~12.9 ms | ~14.7 ms |
+| bevy | — not captured (needs a real GPU window) — |||
+
+**Do NOT read this as a render verdict.** It shows only that the pipeline emits
+well-formed same-shape samples and that three/babylon are independently measured. It
+does **not** say babylon out-renders three (both are SwiftShader *software* numbers
+near a software ceiling, not GPU throughput), and it says **nothing** about web vs
+bevy (a basis GAP). Real-GPU numbers replace this illustration when the probes are run
+on a GPU per the README/`CLAUDE.md` commands above — that is the honest next step, and
+it closes the #160 epic on a measurement *pipeline*, not a fabricated table.
