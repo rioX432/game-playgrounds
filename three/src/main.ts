@@ -17,9 +17,14 @@ if (!canvas || !sidebar || !overlay) {
 // runtime-graph rule). When `?renderer` is absent, the classic path below is untouched.
 const measureParams = parseMeasureParams(location.search);
 if (measureParams.rendererMode !== "classic") {
-  void import("./engine/webgpu/measureWebgpu").then(({ runWebgpuMeasure }) =>
-    runWebgpuMeasure(canvas, measureParams),
-  );
+  import("./engine/webgpu/measureWebgpu")
+    .then(({ runWebgpuMeasure }) => runWebgpuMeasure(canvas, measureParams))
+    .catch((err: unknown) => {
+      // Surface chunk-load / RAPIER.init / renderer.init failures instead of a silent
+      // blank canvas (e.g. a host where both WebGPU and the WebGL2 fallback are absent).
+      console.error("[measure] WebGPU measure path failed:", err);
+      overlay.textContent = `WebGPU measure path failed: ${String(err)}`;
+    });
 } else {
   startGallery(canvas, sidebar, overlay);
 }

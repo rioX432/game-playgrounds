@@ -16,23 +16,12 @@ import type { MeasureParams, RendererMode } from "../../measure/config";
 import { setFrameHook, runFrameHook } from "../../measure/frameHook";
 import { installRenderSampleSink } from "../../measure/globals";
 import { RenderProbe } from "../../measure/probe";
-import type { RenderBackend } from "../../measure/renderSample";
 import { createWebgpuEngine, type WebgpuBackend } from "./engineWebgpu";
 import { createStressSceneWebgpu } from "./stressSceneWebgpu";
 
-/** How a non-classic {@link RendererMode} resolves across engine + sample labels. */
-interface ResolvedRenderer {
-  /** Backend passed to `WebGPURenderer` (`forceWebGL` decided downstream). */
-  engineBackend: WebgpuBackend;
-  /** Backend recorded in the emitted sample (`webgl` = WebGL2 fallback). */
-  sampleBackend: RenderBackend;
-}
-
-/** Resolve a non-classic mode to its engine + sample backends. */
-function resolveRenderer(mode: Exclude<RendererMode, "classic">): ResolvedRenderer {
-  return mode === "webgpu"
-    ? { engineBackend: "webgpu", sampleBackend: "webgpu" }
-    : { engineBackend: "webgl2", sampleBackend: "webgl" };
+/** Resolve a non-classic mode to the backend requested of `WebGPURenderer`. */
+function resolveEngineBackend(mode: Exclude<RendererMode, "classic">): WebgpuBackend {
+  return mode === "webgpu" ? "webgpu" : "webgl2";
 }
 
 /**
@@ -46,7 +35,7 @@ export async function runWebgpuMeasure(
   if (params.rendererMode === "classic") {
     throw new Error("runWebgpuMeasure called with the classic renderer mode");
   }
-  const { engineBackend, sampleBackend } = resolveRenderer(params.rendererMode);
+  const engineBackend = resolveEngineBackend(params.rendererMode);
 
   const engine = await createWebgpuEngine(canvas, engineBackend);
   await RAPIER.init();
@@ -63,7 +52,9 @@ export async function runWebgpuMeasure(
       meta: {
         engine: "three",
         renderer: "three-webgpu",
-        backend: sampleBackend,
+        // Stamped from the backend the renderer ACTUALLY initialized on, so a WebGPU
+        // request that silently fell back to WebGL2 is recorded honestly as "webgl".
+        backend: engine.actualBackend,
         host: "browser",
         bodies: params.bodies,
         seed: params.seed,
@@ -87,6 +78,9 @@ export async function runWebgpuMeasure(
     if (probe?.isDone()) {
       running = false;
       setFrameHook(null);
+      // Free the physics world + GPU resources once the measurement windows are done.
+      scene.dispose();
+      engine.dispose();
       return;
     }
     requestAnimationFrame((t) => void frame(t));

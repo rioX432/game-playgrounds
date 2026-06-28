@@ -40,6 +40,12 @@ const MAX_PIXEL_RATIO = 2;
 /** A live WebGPU engine: renderer + fresh scene/camera + a single render step. */
 export interface WebgpuEngine {
   readonly renderer: WebGPURenderer;
+  /**
+   * The backend `WebGPURenderer` ACTUALLY initialized on — read from the live backend
+   * after `init()`, NOT from the requested mode. `WebGPURenderer` silently falls back to
+   * WebGL2 when WebGPU is unavailable, so the requested mode can lie; this cannot.
+   */
+  readonly actualBackend: "webgpu" | "webgl";
   readonly scene: Scene;
   readonly camera: PerspectiveCamera;
   /** Draw one frame. Async because `WebGPURenderer` renders via `renderAsync`. */
@@ -63,13 +69,23 @@ export async function createWebgpuEngine(
 ): Promise<WebgpuEngine> {
   const renderer = new WebGPURenderer({
     canvas,
-    antialias: false,
+    // Match the classic bootstrap (antialias: true) so classic-vs-WebGPU frame-time
+    // numbers aren't confounded by an MSAA on/off difference.
+    antialias: true,
     forceWebGL: backend === "webgl2",
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
 
   // MUST complete before the first frame — the WebGPU device/pipeline is set up here.
   await renderer.init();
+
+  // Read the backend the renderer ACTUALLY ended up on (WebGPU vs the WebGL2 fallback):
+  // WebGPURenderer silently falls back to WebGL2 when WebGPU is unavailable. WebGPUBackend
+  // carries `isWebGPUBackend: true`; WebGLBackend does not.
+  const actualBackend: "webgpu" | "webgl" =
+    (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true
+      ? "webgpu"
+      : "webgl";
 
   const scene = new Scene();
   scene.background = new Color(SCENE_BACKGROUND);
@@ -95,6 +111,7 @@ export async function createWebgpuEngine(
 
   return {
     renderer,
+    actualBackend,
     scene,
     camera,
     renderFrame(): Promise<void> {
