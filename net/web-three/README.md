@@ -182,7 +182,7 @@ cd net/web-three && npm run build && npx vite preview --port 4173               
 cd net/web-three && npm i -D playwright                                                    # one-off
 PREVIEW_URL=http://localhost:4173 \
   PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3' \
-  OUT=../measurements/n2/web-three-client-render.jsonl \
+  RENDER_OUT=../measurements/n2/web-three-client-render.jsonl \
   npm run smoke:render
 ```
 

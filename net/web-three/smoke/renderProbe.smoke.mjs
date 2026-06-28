@@ -20,14 +20,16 @@
 //                      PORT=2567 npm run dev:server:loaded
 //   cd net/web-three && npm run build && npx vite preview --port 4173
 //   cd net/web-three && PREVIEW_URL=http://localhost:4173 \
-//                      PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0' \
-//                      OUT=../measurements/n2/web-three-client-render.jsonl \
+//                      PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3' \
+//                      RENDER_OUT=../measurements/n2/web-three-client-render.jsonl \
 //                      node smoke/renderProbe.smoke.mjs
 //
 // Env:
 //   PREVIEW_URL   base URL of the built client (default http://localhost:4173)
 //   PROBE_QUERY   query string with ?probe=1 + join keys (matches the loaded room)
-//   OUT           output JSONL path (default ./client-render.jsonl)
+//   RENDER_OUT    output JSONL path (default ./client-render.jsonl). Named distinctly
+//                 from the server's OUT (server metrics) so a globally-exported OUT
+//                 never sends MetricsSample lines into the client-render sidecar.
 //   TARGET        kept-window target before harvesting (default 3)
 //   TIMEOUT_MS    overall wait budget (default 60000)
 
@@ -38,8 +40,8 @@ import { dirname, isAbsolute, resolve } from "node:path";
 const PREVIEW_URL = process.env.PREVIEW_URL ?? "http://localhost:4173";
 const PROBE_QUERY =
   process.env.PROBE_QUERY ??
-  "?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0";
-const OUT = process.env.OUT ?? "client-render.jsonl";
+  "?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3";
+const OUT = process.env.RENDER_OUT ?? "client-render.jsonl";
 const TARGET = Number(process.env.TARGET ?? 3);
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 60_000);
 const POLL_MS = 500;

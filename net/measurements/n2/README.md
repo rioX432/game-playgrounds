@@ -48,10 +48,17 @@ parity gap vs Bevy frame diagnostics — do NOT cross-compare magnitudes).
 
 **HONEST CAVEAT — this committed run is a headless software-WebGL smoke**, not a
 real-GPU result. Headless Chromium renders WebGL through SwiftShader, so the
-absolute `clientFps` / frame-time magnitudes are software-rendered (note the
-`clientCount:1`, single headless renderer). The pipeline and sample SHAPE are
-faithful; the magnitudes are not. For real-GPU numbers, follow the **manual**
-procedure in `net/web-three/README.md` → "Client-render probe".
+absolute `clientFps` / frame-time magnitudes are software-rendered. The pipeline
+and sample SHAPE are faithful; the magnitudes are not. For real-GPU numbers,
+follow the **manual** procedure in `net/web-three/README.md` → "Client-render probe".
+
+**`clientCount:1` is structural, not a smoke artifact.** A client-render probe
+connects exactly ONE real rendering client (plus the server's bot-driven load), so
+`clientCount=1` holds for the real-GPU manual path too — it does NOT reproduce the
+2-client server stage (`web-stress.jsonl` `n2-stress-ramp` has `clientCount:2`).
+That is why `clientCount` is deliberately omitted from the join key list above:
+join on `scenario` / `engine` / `seed` / `tickRate` / `botCount` + impairment knobs
+only. Mind also the ~1-entity rendered-load delta (1+bots here vs 2+bots there).
 
 ```bash
 # Server: a loaded n2-stress-ramp stage (24 bots), same seed/tick as web-stress.jsonl.
@@ -62,6 +69,6 @@ cd net/web-three && npm run build && npx vite preview --port 4173 &
 cd net/web-three && npm i -D playwright   # one-off; NOT a package.json dep
 PREVIEW_URL=http://localhost:4173 \
   PROBE_QUERY='?probe=1&scenario=n2-stress-ramp&seed=12345&tickRate=20&botCount=24&clientCount=1&delayCtoSMs=0&delayStoCMs=0&lossPct=0&warmupMs=2000&windowDurationMs=4000&maxWindows=3' \
-  OUT=../measurements/n2/web-three-client-render.jsonl \
+  RENDER_OUT=../measurements/n2/web-three-client-render.jsonl \
   npm run smoke:render
 ```
