@@ -36,7 +36,11 @@ function createWindow() {
     },
   });
   win.removeMenu();
-  win.loadFile(path.join(webDist, "index.html"));
+  // MEASURE_QUERY (e.g. "?sample=13-stress-bodies&measure=1&renderer=webgpu&bodies=2000&seed=12345")
+  // drives the auto-measure mode for the web-on-steam Layer-2 host-overhead runs (#174).
+  // When unset, the shell just opens the gallery (the normal Steam-packaging smoke).
+  const search = process.env.MEASURE_QUERY || "";
+  win.loadFile(path.join(webDist, "index.html"), search ? { search } : undefined);
 }
 
 app.whenReady().then(() => {
