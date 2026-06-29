@@ -197,14 +197,24 @@ BOT_COUNT=24 SEED=12345 TICK=20 SCENARIO=n2-stress-ramp PORT=2567 \
 
 ### Measurement mechanism
 
-Two honest options:
+Three honest options:
 
-**(a) Manual, real-GPU (the honest numbers).** Start the loaded server, then
-`npm run dev`, open the printed dev URL **with the probe query** in a real browser.
-The page exposes `window.__clientRenderSamples` and
-`window.__downloadClientRenderJsonl()` (and `console.log`s each line as
-`[client-render] {…}`). This uses your real GPU, so fps/frame-time are
-representative.
+**(a) Automated real-GPU runner (preferred, #191).** Run
+`ENGINE=babylon node net/tools/realGpuRender.mjs` from the repo root **on a real
+machine, keeping the launched Chrome window foreground**. It spawns the loaded
+server (reusing the exact `?probe=1...` join-key query the server prints), builds +
+`vite preview`s this client, launches a **headed Chrome** (real GPU, SwiftShader NOT
+forced), verifies `UNMASKED_RENDERER_WEBGL` is non-SwiftShader, harvests
+`window.__clientRenderSamples` over CDP into `web-babylon-client-render.realgpu.jsonl`
++ a `.meta.json` (GPU evidence), and kills every spawned process. It **aborts** if
+the live renderer is software. Attended run (vsync, foreground rAF, thermal
+cooldown). Full procedure + knobs: `net/tools/README.md`.
+
+**(a2) Fully manual, real-GPU.** Start the loaded server, then `npm run dev`, open
+the printed dev URL **with the probe query** in a real browser. The page exposes
+`window.__clientRenderSamples` and `window.__downloadClientRenderJsonl()` (and
+`console.log`s each line as `[client-render] {…}`). This uses your real GPU, so
+fps/frame-time are representative.
 
 **(b) Playwright smoke (auto, software-WebGL).** `smoke/renderProbe.smoke.mjs`
 loads the built client headless against the loaded server, harvests

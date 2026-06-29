@@ -107,7 +107,45 @@ PREVIEW_URL=http://localhost:4173 \
 
 Both committed sidecars are **headless software-WebGL smokes** (SwiftShader),
 labelled as such above; for honest magnitudes replace either with a real-GPU
-manual run (`net/web-{three,babylon}/README.md` → "Client-render probe").
+attended run (next section).
+
+#### Two layers: `software` smoke vs `real-GPU` attended (#191)
+
+The web client-render sidecars come in **two explicit layers** — do not confuse
+their magnitudes:
+
+| Layer | Renderer | Magnitudes | How / where |
+|-------|----------|-----------|-------------|
+| **software smoke** | headless Chromium → **SwiftShader** (software) | **NOT real GPU** | `npm run smoke:render` above; committed `web-{three,babylon}-client-render.jsonl` (the tables in COMPARISON §8.7 are explicitly software-WebGL) |
+| **real-GPU attended** | **headed Chrome**, real display | real GPU (verified non-SwiftShader) | `node net/tools/realGpuRender.mjs` → `web-{three,babylon}-client-render.realgpu.jsonl` + `.meta.json` |
+
+The committed `*-client-render.jsonl` files (no `.realgpu.` infix) are the
+**software** layer — they exist to prove the pipeline emits well-formed, same-shape
+samples, NOT to report a real-GPU verdict.
+
+The **real-GPU** layer is produced by the CDP runner `net/tools/realGpuRender.mjs`
+(#191): it spawns the loaded server, builds + `vite preview`s the client, launches
+a **headed Chrome** (`headless:false`, SwiftShader NOT forced → real GPU), reuses
+the **exact** `?probe=1...` join-key query the server prints, harvests
+`window.__clientRenderSamples` over CDP, records `UNMASKED_RENDERER_WEBGL` in a
+companion `.meta.json` (so non-SwiftShader is verifiable), and kills every spawned
+process. It **aborts without writing** if the live renderer is SwiftShader/software.
+
+```bash
+# ATTENDED — on a real machine, with the launched Chrome window kept FOREGROUND.
+ENGINE=three   node net/tools/realGpuRender.mjs   # one run per bot stage:
+ENGINE=babylon node net/tools/realGpuRender.mjs   #   BOT_COUNT=2, then 24, then 100
+# Procedure: join keys (scenario/engine/seed/tickRate/botCount) come from the
+# server; clientCount=1 (one real renderer); window is vsync-capped so frame-time
+# p50/p95 is primary and fps is a ceiling; per-frame GPU time < ~8.3 ms is invisible
+# to rAF; allow a thermal cooldown between stages. Full procedure: net/tools/README.md.
+```
+
+**Why real-GPU is NOT on CI / not headless:** headless = SwiftShader (software, not
+trustworthy), rAF throttles when the window is occluded, and vsync hides sub-8.3 ms
+GPU time — so a trustworthy real-GPU number requires an **attended** run (real
+display, foreground window, thermal cooldown). The CI/local gate stays **build +
+typecheck + schema** only; real-GPU magnitudes are deliberately off CI (#191).
 
 ### Bevy native sidecar (`bevy-client-render.jsonl`, #168)
 
