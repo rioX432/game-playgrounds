@@ -18,6 +18,12 @@ npm run lint
 - Each sample lives in `src/samples/<NN-name>/` and implements the `Sample` interface (`src/samples/types.ts`), registered in `src/samples/registry.ts`.
 - Rendering: **Three.js**. Physics: **Rapier** (`@dimforge/rapier3d-compat`).
 
+### Auto-measure mode & renderer switch
+
+- `?measure=1` turns on **auto-measure mode** (OFF for normal play): it spawns a seeded, deterministic stress scene and records raw `requestAnimationFrame` present-to-present deltas → p50/p95/p99 + longFrameCount. Full URL contract: `?sample=13-stress-bodies&bodies=2000&measure=1&seed=N&warmupMs=...&windowMs=...&renderer=webgl|webgpu` (parsed by `src/measure/config.ts`).
+- `?renderer=` selects the renderer: absent = the classic `WebGLRenderer`; `webgpu` = `WebGPURenderer` (WebGPU backend); `webgl` = `WebGPURenderer`'s WebGL2 fallback. The `three/webgpu` path is a separate dynamic import (`src/engine/webgpu/`) so `three` core and `three/webgpu` never share one module graph (duplicate-class hazard).
+- Measured results: [`../COMPARISON.md`](../COMPARISON.md) §5.1 / §9.
+
 ## Docs
 
 - `docs/SAMPLES.md` — the catalog of built samples (all 12 mechanics, with links)

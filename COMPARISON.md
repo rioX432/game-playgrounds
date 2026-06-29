@@ -277,8 +277,10 @@ mean — browser corroborates):
 
 ## 6. Deployment to Steam
 
-- **Three / Babylon (web):** wrap the build in **Electron** → `.exe` → Steam.
-  (Electron over Tauri for games: more consistent rendering across machines.)
+- **Three / Babylon (web):** wrap the build in a desktop shell → `.exe`/`.app` →
+  Steam. **Electron** (bundled Chromium) is the safe default — WebGPU on any macOS,
+  measurable like a normal app, but **237 MB**; **Tauri** (system WebView) is **5 MB**
+  but gates WebGPU to macOS 26+ and resists measurement. Measured trade-off: §9.
 - **Bevy:** already a native `.exe` → Steam, no wrapper.
 - **Steam process (all three):** developer signup + $100 (recouped at $1,000
   earned) + store page + upload; you keep 70%.
