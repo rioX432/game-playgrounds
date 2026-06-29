@@ -38,9 +38,18 @@ export async function runWebgpuMeasure(
   const engineBackend = resolveEngineBackend(params.rendererMode);
 
   const engine = await createWebgpuEngine(canvas, engineBackend);
-  await RAPIER.init();
-  const scene = createStressSceneWebgpu(engine.scene, params.seed);
-  scene.spawn(params.bodies);
+  // Once the WebGPU engine holds a live GPU device, any setup failure below must free it
+  // before surfacing — otherwise a failed measure run (e.g. RAPIER.init rejecting) leaks
+  // the renderer/device. main.ts still sees the rethrown error.
+  let scene: ReturnType<typeof createStressSceneWebgpu>;
+  try {
+    await RAPIER.init();
+    scene = createStressSceneWebgpu(engine.scene, params.seed);
+    scene.spawn(params.bodies);
+  } catch (err) {
+    engine.dispose();
+    throw err;
+  }
 
   let probe: RenderProbe | null = null;
   if (params.measure) {

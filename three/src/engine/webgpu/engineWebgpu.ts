@@ -77,7 +77,14 @@ export async function createWebgpuEngine(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
 
   // MUST complete before the first frame — the WebGPU device/pipeline is set up here.
-  await renderer.init();
+  // If init() rejects, the renderer has already allocated GPU-adjacent resources, so free
+  // it before surfacing rather than leaking a half-initialized device.
+  try {
+    await renderer.init();
+  } catch (err) {
+    renderer.dispose();
+    throw err;
+  }
 
   // Read the backend the renderer ACTUALLY ended up on (WebGPU vs the WebGL2 fallback):
   // WebGPURenderer silently falls back to WebGL2 when WebGPU is unavailable. WebGPUBackend
