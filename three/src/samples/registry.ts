@@ -11,6 +11,7 @@ import emoteWheel from "./10-emote-wheel/index";
 import topDownTwinStick from "./11-top-down-twin-stick/index";
 import tinyPlanetGravity from "./12-tiny-planet-gravity/index";
 import stressBodies from "./13-stress-bodies/index";
+import navmeshPathfind from "./14-navmesh-pathfind/index";
 import type { Sample } from "./types";
 
 /**
@@ -32,4 +33,5 @@ export const samples: Sample[] = [
   topDownTwinStick,
   tinyPlanetGravity,
   stressBodies,
+  navmeshPathfind,
 ];
