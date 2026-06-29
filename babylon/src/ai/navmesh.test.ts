@@ -104,6 +104,10 @@ describe("buildHeadlessNav", () => {
       const walledPath = walled.computePath(start, goal);
       const openPath = open.computePath(start, goal);
 
+      // Guard against a vacuous pass: both queries must produce real paths.
+      expect(openPath.length).toBeGreaterThan(1);
+      expect(walledPath.length).toBeGreaterThan(1);
+
       const directDistance = distXZ(start, goal);
       // The open path is essentially the straight line; the walled path bends.
       expect(pathLength(openPath)).toBeLessThan(directDistance + OPEN_PATH_SLACK);
@@ -125,6 +129,8 @@ describe("buildHeadlessNav", () => {
 
       const a = nav.computePath(start, goal);
       const b = nav.computePath(start, goal);
+      // Guard against a vacuous pass: an empty path would make toEqual trivially true.
+      expect(a.length).toBeGreaterThan(1);
       expect(a).toEqual(b);
     } finally {
       nav.dispose();
