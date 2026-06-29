@@ -91,6 +91,9 @@ const OBSTACLE_HEIGHT: f32 = 2.0;
 /// Capsule agent radius and total resting height offset.
 const AGENT_RADIUS: f32 = 0.4;
 const AGENT_HALF_HEIGHT: f32 = 0.5;
+/// Radius of the goal marker sphere — shared by its mesh and its lift height so
+/// the two can't drift apart.
+const GOAL_MARKER_RADIUS: f32 = 0.35;
 /// Top-down camera height and tiny Z nudge (so `up = +Y` is non-degenerate).
 const CAM_HEIGHT: f32 = 26.0;
 const CAM_Z_NUDGE: f32 = 0.01;
@@ -270,12 +273,12 @@ fn setup(
 
     // Goal marker (green sphere).
     commands.spawn((
-        Mesh3d(meshes.add(Sphere::new(0.35))),
+        Mesh3d(meshes.add(Sphere::new(GOAL_MARKER_RADIUS))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: COLOR_GOAL,
             ..default()
         })),
-        Transform::from_translation(nav::to_world(GOAL, 0.35)),
+        Transform::from_translation(nav::to_world(GOAL, GOAL_MARKER_RADIUS)),
         scope.clone(),
     ));
 
@@ -363,7 +366,10 @@ fn drop_dynamic_obstacle(
         DespawnOnExit(AppState::S14NavmeshPathfind),
     );
 
-    // Re-path from where the agent actually is right now.
+    // Re-path from where the agent actually is right now. With the shipped
+    // timing (start far from DYNAMIC_CENTER, ~10 units of travel before the
+    // drop) the agent is nowhere near the new wall, so `from` is never inside
+    // the fresh AABB and the re-query always succeeds.
     let Ok(tf) = agent.single() else {
         return;
     };
@@ -372,6 +378,12 @@ fn drop_dynamic_obstacle(
         world.waypoints = new_route;
         world.leg = 0;
         world.repaths += 1;
+        info!(
+            "s14 nav: dynamic obstacle dropped -> re-path #{} from {:?} ({} waypoints)",
+            world.repaths,
+            from,
+            world.waypoints.len(),
+        );
     }
     // If the re-route is somehow None (it should not be — the field stays open),
     // keep the old waypoints so the agent at least continues toward the goal.
