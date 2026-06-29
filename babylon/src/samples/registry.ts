@@ -13,6 +13,7 @@ import { sample11 } from "./11-top-down-twin-stick/index";
 import { sample12a } from "./12a-spherical-gravity/index";
 import { sample12b } from "./12b-tiny-planet/index";
 import { sample13 } from "./13-stress-bodies/index";
+import { sample14 } from "./14-navmesh-pathfind/index";
 
 /**
  * The ordered list of all playground samples. `/dev-all` appends a new entry
@@ -33,6 +34,7 @@ export const samples: Sample[] = [
   sample12a,
   sample12b,
   sample13,
+  sample14,
 ];
 
 export function findSample(id: string): Sample | undefined {
