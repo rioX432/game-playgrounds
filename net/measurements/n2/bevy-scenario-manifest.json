@@ -1,0 +1,47 @@
+{
+  "seed": 12345,
+  "engine": "bevy",
+  "note": "WAN-profile sweep sidecar. Join onto metrics.jsonl on scenario + injectedDelay* + lossPct. Jitter is reproducible from the seed (shared sampler).",
+  "entries": [
+    {
+      "scenario": "n2-wan-profile-sweep",
+      "profile": "clean",
+      "oneWayDelayMs": 0.0,
+      "jitterSigmaMs": 0.0,
+      "jitterDistribution": "none",
+      "jitterCorrelation": 0.0,
+      "lossPct": 0.0,
+      "reorderNote": "Reorder emerges from jitter; faithful — renet runs over UDP (out-of-order delivery is physical)."
+    },
+    {
+      "scenario": "n2-wan-profile-sweep",
+      "profile": "good-wifi",
+      "oneWayDelayMs": 10.0,
+      "jitterSigmaMs": 3.0,
+      "jitterDistribution": "normal",
+      "jitterCorrelation": 0.25,
+      "lossPct": 0.1,
+      "reorderNote": "Reorder emerges from jitter; faithful — renet runs over UDP (out-of-order delivery is physical)."
+    },
+    {
+      "scenario": "n2-wan-profile-sweep",
+      "profile": "4g-mobile",
+      "oneWayDelayMs": 25.0,
+      "jitterSigmaMs": 10.0,
+      "jitterDistribution": "pareto",
+      "jitterCorrelation": 0.25,
+      "lossPct": 1.0,
+      "reorderNote": "Reorder emerges from jitter; faithful — renet runs over UDP (out-of-order delivery is physical)."
+    },
+    {
+      "scenario": "n2-wan-profile-sweep",
+      "profile": "transcontinental",
+      "oneWayDelayMs": 80.0,
+      "jitterSigmaMs": 20.0,
+      "jitterDistribution": "paretonormal",
+      "jitterCorrelation": 0.5,
+      "lossPct": 0.5,
+      "reorderNote": "Reorder emerges from jitter; faithful — renet runs over UDP (out-of-order delivery is physical)."
+    }
+  ]
+}

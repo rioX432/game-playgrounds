@@ -80,6 +80,17 @@ All measurement output is **JSON Lines**: one `MetricsSample`
   impairment knobs) so it LEFT JOINs onto `metrics.jsonl` without pretending to be
   one. The shared pure sampler `aggregateRenderWindow` (frame deltas → fps + p50/p95)
   is unit-tested headless; the per-engine probes (#166/#167/#168) reuse it.
+- **WAN-profile jitter knobs live in a SEPARATE sidecar too (#159).** The
+  `n2-wan-profile-sweep` adds delay **jitter** + emergent reorder via named WAN
+  profiles (`net/protocol/src/wanProfiles.ts`). The base delay/loss still ride the
+  existing `injectedDelay*` / `lossPct` fields, but the jitter **sigma /
+  distribution / correlation** are INPUT knobs (constant per profile, not per-tick
+  outputs), so — same thin-schema discipline as the client-render sidecar — they go
+  in a `scenario-manifest.json` sidecar (`ScenarioManifest`,
+  `net/protocol/src/scenarioManifest.ts`), joined on `scenario` + `injectedDelay*` +
+  `lossPct`. The `MetricsSample` is UNCHANGED (#148 diff + the Bevy 18-field pin test
+  stay green). The jitter sampler is shared + parity-pinned (`jitter.ts` ↔
+  `net/bevy/src/jitter.rs` via `jitterFixtures.json`). See COMPARISON §8.8.
 
 ## Subprojects
 
