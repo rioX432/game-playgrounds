@@ -160,8 +160,20 @@ a headless `MinimalPlugins` run would time the `ScheduleRunner` loop rather than
 real render frames — committing that would be a faked magnitude (Core Value #1).
 The sampler + cross-language parity are headless-tested instead (`cd net/bevy &&
 cargo test`; the shared fixture `net/protocol/src/clientRenderFixtures.json` keeps
-the Rust and TS samplers numerically identical). Produce the honest sidecar with a
-real-GPU manual run:
+the Rust and TS samplers numerically identical). Produce the honest sidecar with the
+**scripted real-GPU runner** (#192, the native analogue of the web CDP runner) — ONE
+attended command, with a software-adapter guard and no process leaks:
+
+```bash
+cd net/bevy && BOT_COUNT=24 SEED=12345 TICK=20 ./tools/real-gpu-render.sh
+# default -> ../measurements/n2/bevy-client-render.realgpu.jsonl (+ .meta.json provenance)
+```
+
+It builds once, spawns the loaded authority, runs the windowed `--client` probe,
+lets the in-app sink write the sidecar, then exits cleanly. If the client's wgpu
+adapter is SOFTWARE (`device_type: Cpu`/llvmpipe/SwiftShader) or there is no GPU
+window (headless), it ABORTS and writes nothing — a real-GPU file is never produced
+from a non-real-GPU context. Equivalent manual two-terminal form:
 
 ```bash
 # Terminal 1 — loaded authority (24 bots, same seed/tick as bevy-stress.jsonl):
@@ -171,6 +183,9 @@ cd net/bevy && RENDER_PROBE=1 SCENARIO=n2-stress-ramp SEED=12345 TICK=20 BOT_COU
   WARMUP_MS=2000 WINDOW_MS=4000 MAX_WINDOWS=3 \
   RENDER_OUT=../measurements/n2/bevy-client-render.jsonl cargo run -- --client
 ```
+
+Re-run per bot stage (`2`, `24`, `100`) with a **thermal cooldown** between, keeping
+the client window FOREGROUND, so the lines LEFT JOIN onto the server stages.
 
 **Web-vs-bevy magnitudes are NOT cross-comparable** (browser rAF vs native
 window/GPU — a §8.2 parity gap); only the SHAPE under bot load is. Because the

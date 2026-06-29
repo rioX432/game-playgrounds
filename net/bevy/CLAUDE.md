@@ -30,9 +30,12 @@ cargo run -- --client [host:port]            # windowed client (DefaultPlugins)
 cargo run -- --scenario                      # headless N2 load probe -> metrics.jsonl
 cargo test --test probe_scenario             # real-UDP N2 probe (tiny shrunk run)
 
-# Client render-under-load probe (#168) — windowed, real GPU required (manual):
+# Client render-under-load probe (#168) — windowed, real GPU required (manual two-terminal):
 cargo run -- --server-loaded                                    # terminal 1: loaded authority
 RENDER_PROBE=1 RENDER_OUT=client-render.jsonl cargo run -- --client   # terminal 2: probe client
+
+# Scripted, ONE command (#192) — same run, software-adapter guard + meta.json (ATTENDED, real GPU):
+BOT_COUNT=24 SEED=12345 TICK=20 ./tools/real-gpu-render.sh
 ```
 
 ## N2 load probe (#147)
@@ -212,10 +215,35 @@ Throttled windows (a `dt` above the contract's `THROTTLE_MAX_MS = 250`, a
 suspend/minimize pause) and statistically-weak windows (below
 `MIN_VALID_SAMPLES = 30`) are dropped, never recorded.
 
-### Manual real-GPU run (the honest numbers)
+### Real-GPU run (the honest numbers) — scripted (#192) or manual
 
-The windowed measurement needs a real GPU window, so it is a **manual** run (the
-logic — sampler + fixture parity — is headless-tested by `cargo test`):
+The windowed measurement needs a real GPU window, so it is an **ATTENDED** run (the
+logic — sampler + fixture parity — is headless-tested by `cargo test`). Two ways to
+drive it; both produce the SAME sidecar.
+
+**Scripted — ONE command (`tools/real-gpu-render.sh`, #192).** The native analogue of
+the web `net/tools/realGpuRender.mjs` (#191). It builds once, spawns the loaded
+authority, runs the windowed `--client` probe against it, lets the in-app sink emit
+the `ClientRenderSample` lines, then exits cleanly (**no process leaks** — the server
+tree is killed on every exit path). It writes the sidecar + a provenance `.meta.json`:
+
+```bash
+cd net/bevy
+# one bot stage per invocation (mirrors the server n2-stress-ramp stages):
+BOT_COUNT=24 SEED=12345 TICK=20 ./tools/real-gpu-render.sh
+# default RENDER_OUT -> ../measurements/n2/bevy-client-render.realgpu.jsonl (+ .meta.json)
+```
+
+**Honesty guard (the whole point).** The probe is ALWAYS the windowed `--client`
+(`DefaultPlugins` + wgpu + a real OS window) — NEVER the headless `--server`/`--scenario`
+path — so the runner can not accidentally time the `ScheduleRunner` loop (a fabricated
+magnitude). It captures the client's wgpu adapter log; if it is SOFTWARE
+(`device_type: Cpu` / llvmpipe / SwiftShader) or the client exits non-zero (no
+display / no window) or no window settled, it **ABORTS and writes nothing** — a
+"real-gpu" file is never produced from a non-real-GPU context (Core Value #1). The
+companion `.meta.json` records the adapter string so non-software is verifiable.
+
+**Manual two-terminal** — the same run, spelled out (what the script automates):
 
 ```bash
 # Terminal 1 — loaded authority (24 bots, same seed/tick as bevy-stress.jsonl):
@@ -230,13 +258,20 @@ RENDER_PROBE=1 SCENARIO=n2-stress-ramp SEED=12345 TICK=20 BOT_COUNT=24 \
   cargo run -- --client
 ```
 
-Sweep the ramp by re-running terminal 2 (and the server's `BOT_COUNT`) at each
-stage (`2`, `24`, `100`), appending lines — mirroring the server `n2-stress-ramp`
-stages so the two files LEFT JOIN on the keys. **No `bevy-client-render.jsonl` is
-committed**: this environment has no GPU window, and a headless `MinimalPlugins`
+Sweep the ramp by re-running at each stage (`2`, `24`, `100`) — re-invoke the script
+(or terminal 2 + the server's `BOT_COUNT`), appending lines, with a **thermal
+cooldown** between stages so a hot SoC doesn't depress a later stage. The stages
+mirror the server `n2-stress-ramp` so the files LEFT JOIN on the keys. Keep the
+client window **FOREGROUND + visible** (redraw throttles when occluded). Because the
+window is **vsync-capped**, `clientFps` flattens at the refresh rate and HIDES
+headroom — read **frame-time p50/p95 as the PRIMARY metric**, fps as a ceiling
+indicator (see "vsync caveat" above). **No `bevy-client-render*.jsonl` is committed**
+from this agent/CI environment: it has no GPU window, and a headless `MinimalPlugins`
 run would time the `ScheduleRunner` loop, NOT real render frames — committing that
-would be a faked magnitude (Core Value #1). Run the command above on a real GPU to
-produce the honest sidecar.
+would be a faked magnitude (Core Value #1). Run the script (or the commands) on a real
+GPU to produce the honest sidecar. **Web↔bevy magnitudes are NOT cross-comparable**
+(the §8.2 `web-raf-dt` vs `bevy-frame-diagnostics` basis GAP — only the SHAPE under
+bot load is shared).
 
 ## N1 architecture (render / net-sim separation)
 

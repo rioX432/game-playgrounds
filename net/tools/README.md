@@ -87,6 +87,10 @@ the header of `realGpuRender.mjs` for defaults.
 
 - **Tauri / WKWebView real-GPU automation** — rAF throttles under occlusion and CDP
   can't drive the webview; stays a documented §9 limitation.
-- **Bevy native real-GPU sidecar** — separate path (`net/bevy/CLAUDE.md` → "Manual
-  real-GPU run"); this runner is web-only (three/babylon).
+- **Bevy native real-GPU sidecar** — separate path; this `.mjs` runner is web-only
+  (three/babylon). The native analogue is the shell runner
+  `net/bevy/tools/real-gpu-render.sh` (#192): same idea (loaded server + windowed
+  `--client` probe, software-adapter guard, sidecar + `.meta.json`, no process leaks),
+  but no CDP/browser — the Bevy probe writes its own `ClientRenderSample` lines in-app.
+  See `net/bevy/CLAUDE.md` → "Real-GPU run".
 - **Unattended / headless real-GPU** — software fallback; that is the smoke's job.

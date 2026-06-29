@@ -653,7 +653,7 @@ load-bearing caveat:
 - So **real-GPU cross-stack render magnitudes are NOT established in this chapter, by
   design.** The exact commands to produce honest real-GPU sidecars live in the
   per-engine READMEs (`net/web-{three,babylon}/README.md` → "Client-render probe") and
-  `net/bevy/CLAUDE.md` → "Manual real-GPU run".
+  `net/bevy/CLAUDE.md` → "Real-GPU run".
 - **The web real-GPU capture is now automated, but it stays an ATTENDED run (#191).**
   `net/tools/realGpuRender.mjs` is a CDP runner that spawns the loaded server, builds +
   `vite preview`s the client, launches a **headed Chrome** (`headless:false`, SwiftShader
@@ -665,6 +665,20 @@ load-bearing caveat:
   window + thermal cooldown. The two layers — `software` smoke vs `real-GPU` attended —
   are spelled out in `net/measurements/n2/README.md` and `net/tools/README.md`. The
   table below is still the **software** smoke; a real-GPU run replaces it when performed.
+- **The bevy native real-GPU capture is now scripted too, and likewise stays ATTENDED
+  (#192).** `net/bevy/tools/real-gpu-render.sh` is the native analogue of the web CDP
+  runner: one command that builds once, spawns the loaded authority, runs the windowed
+  `--client` probe against it, lets the in-app sink emit the `ClientRenderSample` lines
+  (basis `bevy-frame-diagnostics`, raw `FRAME_TIME`) via the shared
+  `aggregate_render_window`, then exits cleanly (no process leaks). It writes a
+  `bevy-client-render.realgpu.jsonl` + a `.meta.json` recording the wgpu adapter, and —
+  the honest core — the probe is ALWAYS the windowed `--client` (never the headless
+  `--server`/`--scenario` path), so it can not time the `ScheduleRunner` loop; it ABORTS
+  and writes nothing if the adapter is software (`device_type: Cpu`/llvmpipe/SwiftShader)
+  or there is no GPU window. It is OFF CI for the same reasons as the web runner (no real
+  GPU headless + vsync hides headroom). Web↔bevy absolute magnitudes remain NOT
+  cross-comparable (the `web-raf-dt` vs `bevy-frame-diagnostics` basis GAP above); only
+  the SHAPE under bot load is shared.
 
 *Illustration only — software-WebGL smoke; shape-not-magnitude; three/babylon
 same-basis only; bevy not yet captured.* The committed web smokes (`n2-stress-ramp`,
