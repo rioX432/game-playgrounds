@@ -38,6 +38,7 @@ pub mod client_render;
 pub mod conditioner;
 pub mod config;
 pub mod interpolation;
+pub mod jitter;
 pub mod metrics;
 pub mod probe;
 pub mod protocol;
@@ -47,6 +48,7 @@ pub mod scenario;
 pub mod server;
 pub mod sim;
 pub mod transport;
+pub mod wan_profiles;
 
 /// The replication core every net app (server, client, test) loads on top of an
 /// engine core: the replication core + the renet backend. The render layer is

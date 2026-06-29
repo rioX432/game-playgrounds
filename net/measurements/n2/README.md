@@ -18,13 +18,28 @@ cd net/server && npm install
 SCENARIO=n2-stress-ramp    BOTS=2,24,100    CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=web-stress.jsonl    npm run scenario
 SCENARIO=n2-tickrate-sweep TICKS=10,15,20,30 BOT_COUNT=24 CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=web-tickrate.jsonl npm run scenario
 SCENARIO=n2-latency-sweep  BOT_COUNT=24      CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=web-latency.jsonl   npm run scenario
+# WAN-profile sweep (#159, §8.8): also writes a scenario-manifest.json with the jitter knobs.
+SCENARIO=n2-wan-profile-sweep BOT_COUNT=24   CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=../measurements/n2/web-wan.jsonl MANIFEST=../measurements/n2/web-scenario-manifest.json npm run scenario
 
 # Bevy native stack (replicon/renet). Shared cargo cache avoids a cold rebuild.
 cd net/bevy && export CARGO_TARGET_DIR=/abs/shared/target
 SCENARIO=n2-stress-ramp    BOTS=2,24,100    CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=bevy-stress.jsonl    cargo run -- --scenario
 SCENARIO=n2-tickrate-sweep TICKS=10,15,20,30 BOT_COUNT=24 CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=bevy-tickrate.jsonl cargo run -- --scenario
 SCENARIO=n2-latency-sweep  BOT_COUNT=24      CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=bevy-latency.jsonl  cargo run -- --scenario
+SCENARIO=n2-wan-profile-sweep BOT_COUNT=24   CLIENTS=2 SEED=12345 WARMUP_MS=500 MEASURE_MS=1500 OUT=../measurements/n2/bevy-wan.jsonl MANIFEST=../measurements/n2/bevy-scenario-manifest.json cargo run -- --scenario
 ```
+
+## WAN-profile sweep sidecar (`{web,bevy}-wan.jsonl` + `*-scenario-manifest.json`, #159)
+
+`web-wan.jsonl` / `bevy-wan.jsonl` are the `n2-wan-profile-sweep` runs (clean →
+good-wifi → 4g-mobile → transcontinental) behind COMPARISON §8.8. The thin
+`MetricsSample` stays unchanged — base delay/loss are in `injectedDelay*` / `lossPct`,
+but the **jitter sigma / distribution / correlation** live in a
+`{web,bevy}-scenario-manifest.json` **sidecar** (one entry per profile). Join a metrics
+line to its profile on `scenario` + `injectedDelay*` + `lossPct`. The jitter sampler is
+shared + parity-pinned (`net/protocol/src/jitter.ts` ↔ `net/bevy/src/jitter.rs` via
+`jitterFixtures.json`); reorder is emergent (faithful UDP on Bevy, approximate on web —
+see each manifest's `reorderNote`).
 
 ## Read the parity notes before diffing
 

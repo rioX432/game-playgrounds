@@ -48,6 +48,7 @@ scenario stage to `metrics.jsonl` — the SAME #140 schema the web probe writes.
 | `n2-stress-ramp` (default) | sync count `BOTS=2,8,16,24,50,100` @ fixed tick / clean | one app, live bot ramp |
 | `n2-tickrate-sweep` | `TICKS=10,15,20,30` @ fixed `BOT_COUNT` | fresh app per tick |
 | `n2-latency-sweep` | bidirectional delay+loss points @ fixed `BOT_COUNT` | fresh app per point |
+| `n2-wan-profile-sweep` | named WAN profiles (clean/good-wifi/4g-mobile/transcontinental) — base delay+loss **and jitter** (#159) | fresh app per profile |
 | `adhoc` | single-shim bot ramp from `DELAY_*` / `LOSS_*` | one app, live bot ramp |
 
 Env knobs (all optional, mirror the web `npm run scenario`): `SCENARIO SEED OUT
@@ -61,7 +62,9 @@ LOSS_UP_PCT LOSS_DOWN_PCT`. `BOTS`/`TICKS` accept comma ramps. Example:
 |--------|------|
 | `metrics` | `MetricsSample` (serde→IDENTICAL #140 camelCase JSON) + windowed `MetricsAccumulator` + JSONL writer. A test pins the 18-field set. |
 | `rng` | mulberry32 ported from the web `rng.ts` — same seed ⇒ same bot-motion draws. |
-| `conditioner` | app-level delay/loss link (the `TransportShim` mirror). |
+| `jitter` | delay-jitter sampler ported from `net/protocol/src/jitter.ts` (#159), pinned bit-for-bit to the TS peer by the shared `jitterFixtures.json`. Transcendental-free (Irwin–Hall + clamped Lomax). |
+| `wan_profiles` | named WAN profiles mirroring `net/protocol/src/wanProfiles.ts` (#159) + the `scenario-manifest.json` writer (camelCase, matches the web sidecar). |
+| `conditioner` | app-level delay/**jitter**/loss link (the `TransportShim` mirror). Pending queue is a release-time `BinaryHeap` (NOT a FIFO `VecDeque`) since jitter makes release times non-monotonic — emergent reorder, faithful (UDP). |
 | `bots` | server-internal **replicated** bot entities, seeded random walk (`BotDriver` mirror). |
 | `scenario` | `Stage`/`ScenarioDef` + named builders + `plan_segments` (the `defs.ts`/runner mirror). |
 | `probe` | `ProbeServerPlugin` (timing + bytes + stats + conditioned uplink), `ProbeClientPlugin` (conditioned downlink), and `run_scenario`. |

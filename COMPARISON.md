@@ -347,10 +347,12 @@ and resists headless measurement. Bevy sidesteps both.
 > machine** (Apple Silicon, arm64, macOS 26.6, Node v22, Bevy native) over
 > **localhost** — same seed (`12345`), same scenario ids/stages across both stacks,
 > so the lines join on `scenario` + stage knobs. The raw `metrics.jsonl` evidence
-> (six files) lives in `net/measurements/n2/` with the exact commands; this section
-> is the synthesis. Schema: `net/protocol/src/metrics.ts` (one `MetricsSample` ==
-> one line). Chapter rules: `net/CLAUDE.md`. **This is single-machine / localhost,
-> not a WAN or viral-scale benchmark** (see §8.6).
+> (eight files — the original six plus the `{web,bevy}-wan.jsonl` WAN sweep of §8.8,
+> with `*-scenario-manifest.json` sidecars for the jitter knobs) lives in
+> `net/measurements/n2/` with the exact commands; this section is the synthesis.
+> Schema: `net/protocol/src/metrics.ts` (one `MetricsSample` == one line). Chapter
+> rules: `net/CLAUDE.md`. **This is single-machine / localhost, not a WAN or
+> viral-scale benchmark** (see §8.6).
 
 ### 8.1 Scope & pattern — and what "cross-engine" really means here
 
@@ -533,10 +535,11 @@ volume**, exactly like chapter 1's "stale training data is the trap":
 
 Mirrors §7 — scope honesty is the point of the chapter.
 
-- **Single-machine / localhost only.** No WAN, no real RTT, no jitter, no real NAT/
-  hole-punching, no UDP transport loss (web loss is an app-level dropped frame; Bevy
-  loss is an app-level fold skip). Nothing here predicts behavior over the public
-  internet.
+- **Single-machine / localhost only.** No real WAN, no real NAT/hole-punching, no UDP
+  transport loss (web loss is an app-level dropped frame; Bevy loss is an app-level
+  fold skip). **Jitter, packet reordering, and named WAN profiles ARE now modeled and
+  measured** (§8.8) — but still app-level-INJECTED on localhost, not observed over a
+  real network. Nothing here predicts behavior over the public internet.
 - **No viral-scale or cloud-cost behavior.** 2 probe clients + ≤100 server bots on one
   box says nothing about thousands of real connections, horizontal scaling, or hosting
   $/CCU. "It's cheap at 100 bots locally" ≠ "it's cheap at scale".
@@ -670,6 +673,74 @@ near a software ceiling, not GPU throughput), and it says **nothing** about web 
 bevy (a basis GAP). Real-GPU numbers replace this illustration when the probes are run
 on a GPU per the README/`CLAUDE.md` commands above — that is the honest next step, and
 it closes the #160 epic on a measurement *pipeline*, not a fabricated table.
+
+---
+
+### 8.8 Realistic transport conditions — WAN-profile sweep (jitter + reorder)
+
+§8.4's latency sweep injected only a *constant* delay + loss. This axis (#159) adds
+the missing realism — **delay jitter** and the **packet reordering** it induces —
+packaged as named **WAN profiles** and run on both stacks. It clears the §8.6
+"no jitter / no WAN" gap (the impairment is now modeled; it is still *localhost-injected*,
+not a real network — that part of §8.6 stands).
+
+**The profiles** (symmetric up/down; `net/protocol/src/wanProfiles.ts`, grounded in the
+#159 memo's cited sources): `clean` (control) · `good-wifi` (~20 ms RTT, ±3 ms *normal*
+jitter, 0.1 % loss) · `4g-mobile` (~50 ms, ±10 ms *pareto* long-tail, 1 %) ·
+`transcontinental` (~160 ms, ±20 ms *paretonormal*, 0.5 %).
+
+**The numbers** (`n2-wan-profile-sweep`, 24 bots, tick 20, `seed=12345`, 2 clients;
+raw: `net/measurements/n2/{web,bevy}-wan.jsonl` + the `*-scenario-manifest.json`
+sidecars). Mind the §8.2 gaps — RTT is the headline trap again:
+
+| profile | web `rttP50` · `rttP95` | bevy `rttP50` | web `snapshotAge` · bevy `snapshotAge` |
+|:--|:--:|:--:|:--:|
+| clean            | 18.8 · 34.6 ms  | 55.3 ms | 0.4 · 228 ms |
+| good-wifi        | 34.5 · 45.8 ms  | 54.6 ms | 10.7 · 284 ms |
+| 4g-mobile        | 75.4 · **122.7** ms | 54.7 ms | 31.1 · 282 ms |
+| transcontinental | 192.7 · **242.4** ms | 55.5 ms | 88.3 · 352 ms |
+
+- **The same §8.4 cross-engine split holds, now under jitter.** Web RTT tracks the
+  injected delay (app-echo through the shim: 19 → 35 → 75 → 193 ms); **Bevy RTT stays
+  pinned at the ~55 ms transport floor regardless** (injection sits above renet — GAP 2),
+  and the impairment surfaces in `snapshotAge` instead (228 → 352 ms, quantized/noisy by
+  the manual pump). Diffing the two RTT columns is still the trap.
+- **Jitter's own signal is the RTT *tail*.** What jitter adds beyond a constant delay is
+  a widening **p95−p50 spread** on web: ~16 ms (clean) → ~47 ms (4g, the pareto long tail)
+  → ~50 ms (transcontinental). The pareto/paretonormal long tails are visible precisely
+  where the profiles put them. On Bevy the jitter rides *below* the RTT floor (GAP 2) and
+  is partly under the pump's ~1-tick quantization, so the Bevy RTT column can't show it —
+  another instance of "read the right metric per stack".
+
+**How it stays honest + parity-safe (the build, not just the numbers):**
+
+- **One shared jitter sampler, bit-for-bit.** The distribution math is deliberately
+  *transcendental-free* (Irwin–Hall for `normal`; a clamped Lomax for the long tail), so
+  the TS sampler (`net/protocol/src/jitter.ts`) and the Rust port (`net/bevy/src/jitter.rs`)
+  agree EXACTLY — pinned by a checked-in fixture (`jitterFixtures.json`, asserted by both a
+  TS test and the Rust `matches_shared_jitter_fixture`). Same precedent as the §8.7
+  `aggregateRenderWindow` fixture. (They are netem-menu-aligned *approximations*, documented
+  as such, not the exact netem tables.)
+- **Reorder is emergent, with honest per-stack fidelity.** Neither stack injects a separate
+  "reorder %": a later packet can simply draw a smaller delay and overtake an earlier one.
+  On Bevy (UDP) this is **faithful** — and it forced a real fix: the conditioner's pending
+  queue was changed from a FIFO `VecDeque` (front-pop-break, which strands an
+  earlier-release item behind a still-pending front once delays are non-monotonic) to a
+  **release-time priority queue** (`BinaryHeap`). On web (Colyseus reliable-ordered channel)
+  emergent reorder is only an **APPROXIMATION** — real web transport would suppress it via
+  HOL blocking — and the `scenario-manifest.json` `reorderNote` says so per stack.
+- **The thin schema is unchanged.** Jitter/distribution/correlation are *input knobs*, not
+  per-tick outputs, so they live in a `scenario-manifest.json` **sidecar** (join on
+  `scenario` + `injectedDelay*` + `lossPct`), NOT new `MetricsSample` fields — the #148 diff
+  tooling and the Bevy 18-field pin test stay green (the same thin-schema discipline as §8.7's
+  client-render sidecar).
+
+**What §8.8 still does NOT establish:** it is localhost-injected, not real-WAN (no
+retransmit/congestion/HOL dynamics, no real NAT); sub-tick jitter is invisible on the Bevy
+pump (≈1-tick quantization, so good-wifi's ±3 ms is a web-only signal); and web reorder is an
+approximation by construction. The cross-comparable reads remain `serverTickSim`, the
+*shape* of `snapshotAge`, and now the **web RTT-tail-vs-flat-Bevy-RTT** contrast — not the
+RTT absolutes.
 
 ---
 

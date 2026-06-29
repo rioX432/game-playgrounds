@@ -37,6 +37,11 @@ const DEFAULT_SEED = 1;
 // bot motion (consumed synchronously in tick()) stays fully reproducible
 // regardless of when async up-link loss draws happen. (golden-ratio constant)
 const SHIM_SEED_OFFSET = 0x9e3779b9;
+// Jitter (#159) gets its OWN per-direction streams (distinct offsets) so jitter
+// draws never interleave with loss draws or each other — the down stream then
+// reproduces exactly (drawn in the synchronous tick), and bot motion is untouched.
+const JITTER_UP_SEED_OFFSET = 0x85ebca6b;
+const JITTER_DOWN_SEED_OFFSET = 0xc2b2ae35;
 
 const ZERO_SHIM: ShimConfig = {
   up: { delayMs: 0, lossPct: 0 },
@@ -104,9 +109,11 @@ export class GameRoom extends Room {
     // (up-link loss draws happen in the message handler), breaking seed repro.
     const botRng = createRng(seed);
     const lossRng = createRng((seed ^ SHIM_SEED_OFFSET) >>> 0);
+    const jitterUpRng = createRng((seed ^ JITTER_UP_SEED_OFFSET) >>> 0);
+    const jitterDownRng = createRng((seed ^ JITTER_DOWN_SEED_OFFSET) >>> 0);
     this.world = new World();
     this.bots = new BotDriver(this.world, botRng);
-    this.shim = new TransportShim(this.shimConfig, lossRng);
+    this.shim = new TransportShim(this.shimConfig, lossRng, jitterUpRng, jitterDownRng);
     this.collector = new MetricsCollector();
     this.bots.setCount(options.botCount ?? 0);
 

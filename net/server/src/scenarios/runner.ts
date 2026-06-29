@@ -56,8 +56,15 @@ async function connectWithRetry(
   throw lastErr;
 }
 
+// Jitter is fixed at onCreate too (it rides on the shim), so it MUST be part of
+// the room-identity key — otherwise two stages with equal delay/loss but different
+// jitter would wrongly share a room. Absent jitter ⇒ "none".
+const jitterKey = (j: ShimConfig['up']['jitter']): string =>
+  j ? `${j.sigmaMs}/${j.distribution}/${j.correlation}` : 'none';
+
 const shimKey = (s: ShimConfig): string =>
-  `${s.up.delayMs}/${s.up.lossPct}|${s.down.delayMs}/${s.down.lossPct}`;
+  `${s.up.delayMs}/${s.up.lossPct}/${jitterKey(s.up.jitter)}` +
+  `|${s.down.delayMs}/${s.down.lossPct}/${jitterKey(s.down.jitter)}`;
 
 /** Room-construction identity of a stage: stages sharing it can reuse one room. */
 const segmentKey = (s: Stage): string =>

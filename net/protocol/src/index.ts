@@ -30,3 +30,26 @@ export type {
   WelcomeMessage,
   MessageType,
 } from './messages.js';
+
+// Deterministic RNG (shared mulberry32) — used by the jitter sampler + its fixture.
+export { createRng } from './rng.js';
+export type { Rng } from './rng.js';
+
+// Realistic-transport-condition contracts (#159). The jitter sampler is shared
+// (web shim + bevy conditioner); WAN profiles + the scenario-manifest sidecar keep
+// the `MetricsSample` schema UNCHANGED (profile params join via `scenario`).
+export { JitterSampler, NO_JITTER } from './jitter.js';
+export type { JitterConfig, JitterDistribution } from './jitter.js';
+export {
+  WAN_PROFILES,
+  WAN_PROFILE_IDS,
+  allWanProfiles,
+  wanProfile,
+} from './wanProfiles.js';
+export type { WanProfile, WanProfileId } from './wanProfiles.js';
+export {
+  REORDER_NOTE,
+  manifestEntryFromProfile,
+  manifestEntryForProfileId,
+} from './scenarioManifest.js';
+export type { ScenarioManifest, ScenarioManifestEntry } from './scenarioManifest.js';

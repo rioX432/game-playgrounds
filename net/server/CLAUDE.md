@@ -24,6 +24,7 @@ npm run dev:server  # standalone Colyseus + WS transport on PORT (default 2567)
 | `n2-stress-ramp` (default) | sync-entity count `BOTS=2,8,16,24,50,100` at fixed tick / zero impairment | one room, live bot ramp |
 | `n2-tickrate-sweep` | `TICKS=10,15,20,30` at fixed `BOT_COUNT` (optimum search) | fresh room per tick |
 | `n2-latency-sweep` | bidirectional delay+loss points at fixed `BOT_COUNT` | fresh room per point |
+| `n2-wan-profile-sweep` | named WAN profiles (clean/good-wifi/4g-mobile/transcontinental) at fixed `BOT_COUNT` — base delay+loss **and jitter** (#159) | fresh room per profile |
 | `adhoc` | single-shim bot ramp from `DELAY_*` / `LOSS_*` env (the #141 run) | one room, live bot ramp |
 
 Env knobs (all optional): `SCENARIO ENGINE SEED OUT WARMUP_MS MEASURE_MS
@@ -35,11 +36,21 @@ in-process runner (`runScenario`) is also called directly by the Vitest tests.
 Example:
 `SCENARIO=n2-stress-ramp BOTS=2,24,100 CLIENTS=2 WARMUP_MS=300 MEASURE_MS=700 OUT=metrics.jsonl npm run scenario`
 
-Room-boot strategy: `tickRate` and `shim` are fixed at `onCreate`, so the runner
-boots a fresh room whenever those (or `clientCount`) change and live-ramps
-`botCount` within a segment. A finished room is drained to zero bots (not
-force-disconnected — that resets the in-process test client's keep-alive socket)
-and idles until the scenario's single shutdown.
+Room-boot strategy: `tickRate` and `shim` (delay + loss + **jitter**) are fixed at
+`onCreate`, so the runner boots a fresh room whenever those (or `clientCount`)
+change and live-ramps `botCount` within a segment. A finished room is drained to
+zero bots (not force-disconnected — that resets the in-process test client's
+keep-alive socket) and idles until the scenario's single shutdown.
+
+### WAN profiles + jitter (#159)
+
+`n2-wan-profile-sweep` applies the shared `WAN_PROFILES` (`net-protocol`) — base
+delay + loss **and per-delivery jitter** (the `TransportShim` draws from the shared
+`JitterSampler`; reorder emerges from variable delay, only an APPROXIMATION on
+Colyseus's reliable-ordered channel). The thin `MetricsSample` is unchanged: the
+jitter sigma/distribution/correlation are written to a `scenario-manifest.json`
+sidecar (path via `MANIFEST`, else next to `OUT`), joined on `scenario` +
+`injectedDelay*` + `lossPct`. See COMPARISON §8.8.
 
 ## Version pins (verified at impl time — do NOT float)
 
