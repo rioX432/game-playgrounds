@@ -654,6 +654,17 @@ load-bearing caveat:
   design.** The exact commands to produce honest real-GPU sidecars live in the
   per-engine READMEs (`net/web-{three,babylon}/README.md` → "Client-render probe") and
   `net/bevy/CLAUDE.md` → "Manual real-GPU run".
+- **The web real-GPU capture is now automated, but it stays an ATTENDED run (#191).**
+  `net/tools/realGpuRender.mjs` is a CDP runner that spawns the loaded server, builds +
+  `vite preview`s the client, launches a **headed Chrome** (`headless:false`, SwiftShader
+  NOT forced → real GPU), harvests `window.__clientRenderSamples`, and writes a
+  `*-client-render.realgpu.jsonl` + a `.meta.json` recording `UNMASKED_RENDERER_WEBGL`
+  (so non-SwiftShader is verifiable) — aborting if the live renderer is software. It is
+  deliberately **off CI**: headless = SwiftShader, rAF throttles when occluded, and vsync
+  hides sub-8.3 ms GPU time, so a trustworthy number needs a real display + foreground
+  window + thermal cooldown. The two layers — `software` smoke vs `real-GPU` attended —
+  are spelled out in `net/measurements/n2/README.md` and `net/tools/README.md`. The
+  table below is still the **software** smoke; a real-GPU run replaces it when performed.
 
 *Illustration only — software-WebGL smoke; shape-not-magnitude; three/babylon
 same-basis only; bevy not yet captured.* The committed web smokes (`n2-stress-ramp`,
