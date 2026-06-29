@@ -12,7 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@babylonjs/core": "^7.54.0"
+    "@babylonjs/core": "^7.54.0",
+    "recast-detour": "^1.6.4"
   },
   "devDependencies": {
     "@babylonjs/havok": "^1.3.10",
