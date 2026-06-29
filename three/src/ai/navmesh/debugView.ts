@@ -4,8 +4,9 @@
 // it can be unit-tested headless. A Sample calls this inside mount(ctx).
 
 import {
+  BufferAttribute,
   BufferGeometry,
-  Float32BufferAttribute,
+  DynamicDrawUsage,
   Line,
   LineBasicMaterial,
   MeshBasicMaterial,
@@ -20,6 +21,9 @@ const NAVMESH_COLOR = 0x2a6f97;
 const NAVMESH_OPACITY = 0.4;
 const PATH_COLOR = 0xffd166;
 const PATH_LIFT_Y = 0.05; // raise the path line slightly above the navmesh
+// Upper bound on path corners (matches recast computePath's default
+// maxStraightPathPoints), so the line buffer is allocated once and reused.
+const MAX_PATH_POINTS = 256;
 
 /** Handle returned by {@link createNavmeshDebug}; lets a Sample tear it down. */
 export type NavmeshDebug = {
@@ -48,19 +52,31 @@ export function createNavmeshDebug(scene: Scene, navmesh: Navmesh): NavmeshDebug
   });
   scene.add(navmeshHelper);
 
+  // One pre-allocated, GPU-dynamic position buffer reused across re-paths (the
+  // guard-ai sample re-queries every frame); setPath rewrites the array and
+  // moves the draw range rather than allocating a new GL buffer each call.
   const pathGeometry = new BufferGeometry();
+  const pathPositions = new BufferAttribute(
+    new Float32Array(MAX_PATH_POINTS * 3),
+    3,
+  );
+  pathPositions.setUsage(DynamicDrawUsage);
+  pathGeometry.setAttribute("position", pathPositions);
+  pathGeometry.setDrawRange(0, 0);
   const pathMaterial = new LineBasicMaterial({ color: PATH_COLOR });
   const pathLine = new Line(pathGeometry, pathMaterial);
   scene.add(pathLine);
 
   const setPath = (points: Vec3[]): void => {
-    const flat = new Float32Array(points.length * 3);
-    for (let i = 0; i < points.length; i++) {
-      flat[i * 3] = points[i].x;
-      flat[i * 3 + 1] = points[i].y + PATH_LIFT_Y;
-      flat[i * 3 + 2] = points[i].z;
+    const count = Math.min(points.length, MAX_PATH_POINTS);
+    const array = pathPositions.array as Float32Array;
+    for (let i = 0; i < count; i++) {
+      array[i * 3] = points[i].x;
+      array[i * 3 + 1] = points[i].y + PATH_LIFT_Y;
+      array[i * 3 + 2] = points[i].z;
     }
-    pathGeometry.setAttribute("position", new Float32BufferAttribute(flat, 3));
+    pathPositions.needsUpdate = true;
+    pathGeometry.setDrawRange(0, count);
     pathGeometry.computeBoundingSphere();
   };
 

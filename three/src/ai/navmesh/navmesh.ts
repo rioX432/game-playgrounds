@@ -142,7 +142,7 @@ export class Navmesh {
     };
   }
 
-  /** Free the underlying WASM objects. Idempotent-safe to call once. */
+  /** Free the underlying WASM objects. Call exactly once (no double-free guard). */
   destroy(): void {
     this.query.destroy();
     this.navMesh.destroy();
