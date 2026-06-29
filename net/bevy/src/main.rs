@@ -138,7 +138,26 @@ fn run_scenario_cli() {
         },
     );
     match run {
-        Ok(samples) => println!("wrote {} sample(s) to {out}", samples.len()),
+        Ok(samples) => {
+            println!("wrote {} sample(s) to {out}", samples.len());
+            if id == "n2-wan-profile-sweep" {
+                // Sidecar with the per-profile jitter the thin MetricsSample omits.
+                let manifest_path = std::env::var("MANIFEST").unwrap_or_else(|_| {
+                    let dir = std::path::Path::new(&out)
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new("."));
+                    dir.join("scenario-manifest.json").to_string_lossy().into_owned()
+                });
+                match net_bevy::wan_profiles::write_wan_manifest(
+                    std::path::Path::new(&manifest_path),
+                    &id,
+                    seed,
+                ) {
+                    Ok(()) => println!("wrote wan-profile manifest -> {manifest_path}"),
+                    Err(e) => eprintln!("failed to write manifest {manifest_path}: {e}"),
+                }
+            }
+        }
         Err(e) => {
             eprintln!("scenario run failed: {e}");
             std::process::exit(1);

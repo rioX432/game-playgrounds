@@ -9,6 +9,7 @@
 //! `MetricsSample` per stage (see [`crate::probe`]).
 
 use crate::conditioner::LinkConfig;
+use crate::wan_profiles::{all_wan_profiles, WanProfile};
 
 /// Bidirectional impairment for a stage (mirrors the web `ShimConfig`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -31,6 +32,16 @@ impl ShimConfig {
         Self {
             up: LinkConfig::new(delay_ms, loss_pct),
             down: LinkConfig::new(delay_ms, loss_pct),
+        }
+    }
+
+    /// Translate a WAN profile (#159) into a symmetric shim — same base delay,
+    /// jitter, and loss up AND down. Mirrors the web `profileToShim`.
+    pub fn from_profile(p: &WanProfile) -> Self {
+        let link = LinkConfig::with_jitter(p.one_way_delay_ms, p.loss_pct, p.jitter);
+        Self {
+            up: link,
+            down: link,
         }
     }
 
@@ -208,6 +219,37 @@ pub fn n2_tickrate_sweep(o: &ScenarioOpts) -> ScenarioDef {
     }
 }
 
+/// `n2-wan-profile-sweep` (#159): hold bots/tick fixed and sweep the named WAN
+/// profiles (clean → good-wifi → 4g-mobile → transcontinental). Each profile has a
+/// distinct delay/loss (and jitter), so the runner boots a FRESH app per stage. The
+/// realized jitter/distribution/correlation per stage is recorded in the
+/// `scenario-manifest.json` sidecar (the thin `MetricsSample` is unchanged); join a
+/// metrics line to its profile on `scenario` + `injectedDelay*` + `lossPct`.
+pub fn n2_wan_profile_sweep(o: &ScenarioOpts) -> ScenarioDef {
+    let stages = all_wan_profiles()
+        .iter()
+        .map(|profile| Stage {
+            bot_count: o.bot_count.unwrap_or(DEFAULT_FIXED_BOTS),
+            client_count: o.clients(),
+            tick_rate: o.tick(),
+            shim: ShimConfig::from_profile(profile),
+            warmup_ms: o.warmup(),
+            measure_ms: o.measure(),
+        })
+        .collect();
+    ScenarioDef {
+        id: "n2-wan-profile-sweep".to_string(),
+        notes: "Named WAN-profile sweep at fixed bots/tick (clean→good-wifi→4g-mobile→\
+                transcontinental). Fresh app per profile. lossPct = max(up,down); base delay in \
+                injectedDelay*; jitter/distribution/correlation in scenario-manifest.json (join on \
+                scenario+delay+loss). Reorder is emergent from jitter and FAITHFUL here (UDP). \
+                rttP50/P95Ms are renet TRANSPORT RTT and do NOT reflect injected delay/jitter; \
+                those surface in snapshotAge (down) instead."
+            .to_string(),
+        stages,
+    }
+}
+
 /// `adhoc`: a single-shim bot ramp driven entirely by the caller's options — the
 /// env-configured run. One app, live bot ramp.
 pub fn adhoc(o: &ScenarioOpts) -> ScenarioDef {
@@ -240,14 +282,21 @@ pub fn build(id: &str, opts: &ScenarioOpts) -> Option<ScenarioDef> {
         "n2-stress-ramp" => Some(n2_stress_ramp(opts)),
         "n2-latency-sweep" => Some(n2_latency_sweep(opts)),
         "n2-tickrate-sweep" => Some(n2_tickrate_sweep(opts)),
+        "n2-wan-profile-sweep" => Some(n2_wan_profile_sweep(opts)),
         "adhoc" => Some(adhoc(opts)),
         _ => None,
     }
 }
 
 /// Known scenario ids (for CLI help / validation).
-pub fn scenario_ids() -> [&'static str; 4] {
-    ["n2-stress-ramp", "n2-latency-sweep", "n2-tickrate-sweep", "adhoc"]
+pub fn scenario_ids() -> [&'static str; 5] {
+    [
+        "n2-stress-ramp",
+        "n2-latency-sweep",
+        "n2-tickrate-sweep",
+        "n2-wan-profile-sweep",
+        "adhoc",
+    ]
 }
 
 /// App-construction identity of a stage: stages sharing it can reuse one app boot
@@ -258,9 +307,22 @@ pub fn scenario_ids() -> [&'static str; 4] {
 /// `segmentKey` (`runner.ts`).
 fn segment_key(s: &Stage) -> String {
     let sh = &s.shim;
+    // Jitter is fixed at construction too (it rides on the conditioner), so it MUST
+    // be part of the room-identity key — else two stages with equal delay/loss but
+    // different jitter would wrongly share an app boot.
+    let jk = |j: &crate::jitter::JitterConfig| {
+        format!("{}/{:?}/{}", j.sigma_ms, j.distribution, j.correlation)
+    };
     format!(
-        "{}|{}|{}/{}|{}/{}",
-        s.tick_rate, s.client_count, sh.up.delay_ms, sh.up.loss_pct, sh.down.delay_ms, sh.down.loss_pct
+        "{}|{}|{}/{}/{}|{}/{}/{}",
+        s.tick_rate,
+        s.client_count,
+        sh.up.delay_ms,
+        sh.up.loss_pct,
+        jk(&sh.up.jitter),
+        sh.down.delay_ms,
+        sh.down.loss_pct,
+        jk(&sh.down.jitter),
     )
 }
 
@@ -341,5 +403,48 @@ mod tests {
     fn build_rejects_unknown_id() {
         assert!(build("nope", &ScenarioOpts::default()).is_none());
         assert!(build("adhoc", &ScenarioOpts::default()).is_some());
+    }
+
+    #[test]
+    fn wan_profile_sweep_has_one_fresh_app_per_profile_with_jitter() {
+        let def = n2_wan_profile_sweep(&ScenarioOpts::default());
+        assert_eq!(def.id, "n2-wan-profile-sweep");
+        let profiles = all_wan_profiles();
+        assert_eq!(def.stages.len(), profiles.len());
+        // First stage is the clean control.
+        assert_eq!(def.stages[0].shim, ShimConfig::CLEAN);
+        // Each stage carries its profile delay/loss/jitter symmetrically.
+        for (stage, profile) in def.stages.iter().zip(profiles.iter()) {
+            assert_eq!(stage.shim.up.delay_ms, profile.one_way_delay_ms);
+            assert_eq!(stage.shim.down.delay_ms, profile.one_way_delay_ms);
+            assert_eq!(stage.shim.up.jitter, profile.jitter);
+            assert_eq!(stage.shim.up, stage.shim.down);
+        }
+        // Distinct delay/loss (and jitter) per profile ⇒ a fresh app boot per stage.
+        assert_eq!(plan_segments(&def.stages).len(), def.stages.len());
+    }
+
+    #[test]
+    fn wan_profile_jitter_is_in_the_segment_key() {
+        // Two stages, equal delay/loss but different jitter, must NOT share an app.
+        let base = LinkConfig::new(20.0, 0.0);
+        let jittered = LinkConfig::with_jitter(
+            20.0,
+            0.0,
+            crate::jitter::JitterConfig {
+                sigma_ms: 5.0,
+                distribution: crate::jitter::JitterDistribution::Normal,
+                correlation: 0.0,
+            },
+        );
+        let mk = |link: LinkConfig| Stage {
+            bot_count: 8,
+            client_count: 1,
+            tick_rate: 20.0,
+            shim: ShimConfig { up: link, down: link },
+            warmup_ms: 0,
+            measure_ms: 0,
+        };
+        assert_eq!(plan_segments(&[mk(base), mk(jittered)]).len(), 2);
     }
 }

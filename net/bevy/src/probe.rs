@@ -60,6 +60,10 @@ const MAX_CLIENTS: usize = 32;
 /// not drop the same-indexed snapshots. (golden-ratio / xxhash constants.)
 const UPLINK_SEED_OFFSET: u32 = 0x9e37_79b9;
 const DOWNLINK_SEED_OFFSET: u32 = 0x85eb_ca6b;
+/// Jitter (#159) gets its OWN per-direction streams, distinct from loss and bot
+/// motion, so jitter draws stay reproducible and never perturb loss draws.
+const UPLINK_JITTER_SEED_OFFSET: u32 = 0xc2b2_ae35;
+const DOWNLINK_JITTER_SEED_OFFSET: u32 = 0x27d4_eb2f;
 /// Upper bound on the connect handshake wait.
 const CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 
@@ -124,6 +128,8 @@ impl Plugin for ProbeServerPlugin {
             // Dedicated loss-draw stream, distinct from bot motion (BotRng) and
             // from the downlink stream (distinct offset).
             Rng::new(self.seed.wrapping_add(UPLINK_SEED_OFFSET)),
+            // Dedicated jitter stream (distinct from loss + the other direction).
+            Rng::new(self.seed.wrapping_add(UPLINK_JITTER_SEED_OFFSET)),
         )));
         app.init_resource::<SimTimer>();
         app.init_resource::<ReplicationTimer>();
@@ -286,6 +292,8 @@ impl Plugin for ProbeClientPlugin {
             // `self.seed` is already per-client (run seed + client index, see
             // boot_segment); the downlink offset makes it independent of uplink.
             Rng::new(self.seed.wrapping_add(DOWNLINK_SEED_OFFSET)),
+            // Dedicated jitter stream (distinct from loss + the other direction).
+            Rng::new(self.seed.wrapping_add(DOWNLINK_JITTER_SEED_OFFSET)),
         )));
         app.add_systems(
             FixedUpdate,
