@@ -13,6 +13,21 @@ bevy = "0.18"
 # Physics. dim3 = 3D. Version pinned to match avvy-world's workspace policy.
 bevy_rapier3d = { version = "0.34", features = ["dim3"] }
 
+# --- Chapter 4 (NPC/AI) navigation — EXPLICIT, SCOPED exception to the
+# "bevy + bevy_rapier3d only" rule. Justified in CLAUDE.md ("Ch4 nav-crate
+# exception"); do NOT let it cascade to other chapters.
+#   * bevy_rerecast 0.4  — Recast navmesh BAKING from Mesh3d scene geometry
+#     (generation only; async/asset). default-features off drops the GUI
+#     editor-integration crate (Core Value #3 code-first + #2 minimal deps);
+#     `bevy_mesh` keeps the Mesh3d backend.
+#   * vleue_navigator 0.15 — Polyanya path QUERY (pure-CPU, headless-
+#     deterministic). default-features off drops bevy_gizmos; the
+#     Triangulation/NavMesh/path core is feature-independent.
+# Both target bevy ^0.18 — newest releases, no 0.19-compatible nav crate yet
+# (checked crates.io 2026-06-29) → Bevy 0.18.1 pin holds, 0.19 deferred.
+bevy_rerecast = { version = "0.4", default-features = false, features = ["bevy_mesh"] }
+vleue_navigator = { version = "0.15", default-features = false }
+
 # --- Fast-iteration compile profiles (safe; no external tools required) ---
 # Build OUR crate with light optimization (fast to compile, fine to debug),
 # but build all DEPENDENCIES (Bevy, etc.) at opt-level 3 so the running game
