@@ -395,6 +395,11 @@ fn tick(guard: &mut Guard, player: Vec2, scenario: &GuardScenario, dt: f32) -> O
                 guard.lose_timer = 0.0;
             }
             if leashed || guard.lose_timer >= LOSE_GRACE_SECS {
+                // Clear the stale chase path first: if the home route query
+                // fails, Return falls back to a direct seek home rather than
+                // following the old path (which points at the player).
+                guard.path.clear();
+                guard.path_leg = 0;
                 repath_to(guard, scenario, guard.home);
                 guard.state = GuardState::Return;
             }
@@ -403,7 +408,15 @@ fn tick(guard: &mut Guard, player: Vec2, scenario: &GuardScenario, dt: f32) -> O
             // Committed to returning: walk home ignoring the intruder until the
             // post is reached (no mid-return re-acquire, which would yo-yo the
             // guard at the leash edge); detection resumes once patrolling.
-            follow_path(guard, dt);
+            if guard.path.is_empty() {
+                // Home route was momentarily unreachable: fall back to a direct
+                // avoided arrive home so the guard keeps closing instead of
+                // soft-locking on an empty path (symmetric to Chase's guard).
+                let desired = arrive(guard.pos, guard.home, CHASE_SPEED, ARRIVE_SLOW_RADIUS);
+                free_move(guard, desired, &scenario.obstacles, CHASE_SPEED, dt);
+            } else {
+                follow_path(guard, dt);
+            }
             if guard.pos.distance(guard.home) <= HOME_ARRIVE_RADIUS {
                 guard.path.clear();
                 guard.path_leg = 0;
