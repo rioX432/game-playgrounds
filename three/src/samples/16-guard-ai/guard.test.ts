@@ -13,7 +13,7 @@
 //   3. The return phase actually brings the guard HOME: the final distance to
 //      home when it resumes patrol is below the arrive threshold.
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { initNavmesh, type Vec3 } from "../../ai/navmesh";
 import { DEFAULT_GUARD_CONFIG, GuardSim, type GuardState } from "./guard";
 
@@ -118,6 +118,12 @@ describe("guard-ai: scripted FSM run", () => {
     result = run.result;
   });
 
+  afterAll(() => {
+    // Free the navmesh exactly once, regardless of assertion outcomes.
+    sim?.destroy();
+    sim = undefined;
+  });
+
   it("starts patrolling", () => {
     expect(result.states[0]).toBe("patrol");
   });
@@ -148,8 +154,5 @@ describe("guard-ai: scripted FSM run", () => {
   it("returns home and resumes patrol within the final distance threshold", () => {
     expect(result.returnedHome).toBe(true);
     expect(result.finalHomeDistance).toBeLessThan(FINAL_HOME_DISTANCE);
-    // Free the navmesh exactly once, at the end of the suite.
-    sim?.destroy();
-    sim = undefined;
   });
 });

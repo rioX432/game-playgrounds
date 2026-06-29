@@ -186,9 +186,9 @@ const sample: Sample = {
       markerMeshes.length = 0;
       markerGeos.length = 0;
       markerMats.length = 0;
+      const home = guard.home;
       guard.patrolWaypoints.forEach((w) => {
-        const isHome =
-          w.x === guard?.home.x && w.z === guard.home.z;
+        const isHome = Math.hypot(w.x - home.x, w.z - home.z) < 1e-6;
         const geo = new RingGeometry(MARKER_INNER, MARKER_OUTER, 24);
         const mat = new MeshStandardMaterial({
           color: isHome ? HOME_COLOR : PATROL_COLOR,
