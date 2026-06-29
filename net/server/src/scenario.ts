@@ -17,9 +17,42 @@
 //   DELAY_UP_MS / DELAY_DOWN_MS / LOSS_UP_PCT / LOSS_DOWN_PCT   adhoc shim
 //   TICKS     tick sweep, e.g. TICKS="10,20,30" (n2-tickrate-sweep)
 
-import { ENGINES, type Engine } from 'net-protocol';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import {
+  ENGINES,
+  REORDER_NOTE,
+  allWanProfiles,
+  manifestEntryFromProfile,
+  type Engine,
+  type ScenarioManifest,
+} from 'net-protocol';
 import { SCENARIOS, scenarioIds, type ScenarioOpts } from './scenarios/defs.js';
 import { runScenario } from './scenarios/runner.js';
+
+/** Scenario id whose stages map 1:1 to the shared WAN profiles (#159). */
+const WAN_SWEEP_ID = 'n2-wan-profile-sweep';
+
+/**
+ * Write the `scenario-manifest.json` sidecar for the WAN sweep — the profile
+ * jitter/distribution/correlation that the thin `MetricsSample` deliberately does
+ * NOT carry. Readers LEFT JOIN it onto metrics.jsonl on scenario + delay + loss.
+ */
+function writeWanManifest(outPath: string, seed: number, engine: Engine): string {
+  const manifest: ScenarioManifest = {
+    seed,
+    engine,
+    note:
+      'WAN-profile sweep sidecar. Join onto metrics.jsonl on scenario + ' +
+      'injectedDelay* + lossPct. Jitter is reproducible from the seed (shared sampler).',
+    entries: allWanProfiles().map((p) =>
+      manifestEntryFromProfile(WAN_SWEEP_ID, p, REORDER_NOTE.web),
+    ),
+  };
+  const manifestPath = process.env.MANIFEST ?? join(dirname(outPath), 'scenario-manifest.json');
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  return manifestPath;
+}
 
 // Parse a numeric env knob. An empty/whitespace value (`Number('')` is 0) or a
 // value below `min` is treated as UNSET so it falls back to the scenario default
@@ -97,6 +130,12 @@ async function main(): Promise<void> {
       );
     },
   });
+
+  if (def.id === WAN_SWEEP_ID) {
+    const manifestPath = writeWanManifest(metricsPath, seed, engine);
+    // eslint-disable-next-line no-console
+    console.log(`wan-profile manifest -> ${manifestPath}`);
+  }
 
   // eslint-disable-next-line no-console
   console.log(`scenario complete -> ${metricsPath}`);

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { WAN_PROFILES, allWanProfiles } from 'net-protocol';
 import {
   n2StressRamp,
   n2LatencySweep,
   n2TickrateSweep,
+  n2WanProfileSweep,
+  profileToShim,
   adhoc,
   SCENARIOS,
 } from '../src/scenarios/defs.js';
@@ -61,8 +64,51 @@ describe('scenario definitions (#144)', () => {
 
   it('registry exposes every named scenario', () => {
     expect(Object.keys(SCENARIOS).sort()).toEqual(
-      ['adhoc', 'n2-latency-sweep', 'n2-stress-ramp', 'n2-tickrate-sweep'].sort(),
+      [
+        'adhoc',
+        'n2-latency-sweep',
+        'n2-stress-ramp',
+        'n2-tickrate-sweep',
+        'n2-wan-profile-sweep',
+      ].sort(),
     );
+  });
+});
+
+describe('n2-wan-profile-sweep (#159)', () => {
+  it('has one stage per WAN profile, clean first', () => {
+    const def = n2WanProfileSweep();
+    expect(def.id).toBe('n2-wan-profile-sweep');
+    expect(def.stages).toHaveLength(allWanProfiles().length);
+    // First stage is the clean control (zero injection).
+    expect(def.stages[0].shim.up.delayMs).toBe(0);
+    expect(def.stages[0].shim.up.lossPct).toBe(0);
+    expect(def.stages[0].shim.up.jitter?.distribution).toBe('none');
+  });
+
+  it('carries each profile delay/loss/jitter symmetrically up + down', () => {
+    const def = n2WanProfileSweep();
+    for (const [i, profile] of allWanProfiles().entries()) {
+      const s = def.stages[i].shim;
+      expect(s.up.delayMs).toBe(profile.oneWayDelayMs);
+      expect(s.down.delayMs).toBe(profile.oneWayDelayMs);
+      expect(s.up.lossPct).toBe(profile.lossPct);
+      expect(s.up.jitter).toEqual(profile.jitter);
+      expect(s.down.jitter).toEqual(profile.jitter);
+    }
+  });
+
+  it('is one fresh room per profile (each profile differs in delay/loss)', () => {
+    const def = n2WanProfileSweep();
+    expect(planSegments(def.stages)).toHaveLength(def.stages.length);
+  });
+
+  it('profileToShim mirrors a profile into a symmetric shim', () => {
+    const shim = profileToShim(WAN_PROFILES['4g-mobile']);
+    expect(shim.up).toEqual(shim.down);
+    expect(shim.up.delayMs).toBe(25);
+    expect(shim.up.lossPct).toBe(1.0);
+    expect(shim.up.jitter?.distribution).toBe('pareto');
   });
 });
 

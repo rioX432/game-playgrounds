@@ -53,6 +53,42 @@ describe('TransportShim', () => {
     expect(delivered).toBe(1); // after 50ms
   });
 
+  it('keeps the synchronous fast path when jitter is configured but no-op (sigma 0)', () => {
+    const shim = new TransportShim(
+      {
+        up: { delayMs: 0, lossPct: 0, jitter: { sigmaMs: 0, distribution: 'normal', correlation: 0 } },
+        down: { delayMs: 0, lossPct: 0 },
+      },
+      createRng(1),
+      createRng(2),
+      createRng(3),
+    );
+    let delivered = 0;
+    shim.up(() => delivered++);
+    expect(delivered).toBe(1); // sigma 0 ⇒ no-op sampler ⇒ still synchronous
+  });
+
+  it('jitter yields a reproducible, reordered delivery schedule (#159)', () => {
+    vi.useFakeTimers();
+    const cfg = {
+      up: { delayMs: 0, lossPct: 0 },
+      down: { delayMs: 50, lossPct: 0, jitter: { sigmaMs: 15, distribution: 'normal' as const, correlation: 0 } },
+    };
+    const run = (seed: number): number[] => {
+      const shim = new TransportShim(cfg, createRng(seed), createRng(seed + 1), createRng(seed + 2));
+      const order: number[] = [];
+      for (let i = 0; i < 20; i++) shim.down(() => order.push(i));
+      vi.advanceTimersByTime(10_000); // flush every deferred delivery
+      return order;
+    };
+    const a = run(7);
+    const b = run(7);
+    expect(a).toEqual(b); // same seed ⇒ identical effective-delay schedule
+    expect(a).toHaveLength(20); // none lost (lossPct 0)
+    // Variable jitter ⇒ deliveries no longer arrive in strict send order.
+    expect(a).not.toEqual([...Array(20).keys()]);
+  });
+
   it('cancels pending deliveries on dispose', () => {
     vi.useFakeTimers();
     const shim = new TransportShim(

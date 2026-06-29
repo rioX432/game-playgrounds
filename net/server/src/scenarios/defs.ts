@@ -4,6 +4,7 @@
 // tests can shrink the run (tiny windows / fewer stages) without forking the
 // definition.
 
+import { allWanProfiles, type WanProfile } from 'net-protocol';
 import type { ShimConfig } from '../transport/shim.js';
 import type { ScenarioDef, Stage } from './types.js';
 
@@ -34,6 +35,16 @@ const noShim = (): ShimConfig => ({
 const sym = (delayMs: number, lossPct: number): ShimConfig => ({
   up: { delayMs, lossPct },
   down: { delayMs, lossPct },
+});
+
+/**
+ * Translate a shared WAN profile (#159) into a symmetric ShimConfig — same base
+ * delay, jitter, and loss applied up AND down. The jitter config rides along on
+ * each `LinkConfig`, so the shim's `JitterSampler` reproduces the profile's stream.
+ */
+export const profileToShim = (p: WanProfile): ShimConfig => ({
+  up: { delayMs: p.oneWayDelayMs, lossPct: p.lossPct, jitter: p.jitter },
+  down: { delayMs: p.oneWayDelayMs, lossPct: p.lossPct, jitter: p.jitter },
 });
 
 /** Default bidirectional sweep: clean → delay ramp → delay+loss. */
@@ -143,6 +154,36 @@ export function n2TickrateSweep(o: ScenarioOpts = {}): ScenarioDef {
 }
 
 /**
+ * `n2-wan-profile-sweep` (#159): hold bots/tick fixed and sweep the named WAN
+ * profiles (clean → good-wifi → 4g-mobile → transcontinental). Each profile has a
+ * distinct delay/loss (and jitter), so the runner boots a FRESH room per stage.
+ * The realized jitter/distribution/correlation per stage is recorded in the
+ * `scenario-manifest.json` sidecar (the thin `MetricsSample` is unchanged); join
+ * a metrics line to its profile on `scenario` + `injectedDelay*` + `lossPct`.
+ */
+export function n2WanProfileSweep(o: ScenarioOpts = {}): ScenarioDef {
+  const t = timing(o);
+  const stages: Stage[] = allWanProfiles().map((profile) => ({
+    botCount: o.botCount ?? DEFAULT_FIXED_BOTS,
+    clientCount: o.clientCount ?? DEFAULT_CLIENTS,
+    tickRate: o.tickRate ?? DEFAULT_TICK,
+    shim: profileToShim(profile),
+    warmupMs: t.warmupMs,
+    measureMs: t.measureMs,
+  }));
+  return {
+    id: 'n2-wan-profile-sweep',
+    notes:
+      'Named WAN-profile sweep at fixed bots/tick (clean→good-wifi→4g-mobile→transcontinental). ' +
+      'Fresh room per profile. lossPct recorded as max(up,down); base delay in injectedDelay*; ' +
+      'jitter/distribution/correlation are in scenario-manifest.json (join on scenario+delay+loss). ' +
+      'Reorder is emergent from jitter and only APPROXIMATE on web (reliable ordered channel). ' +
+      'serverTickSendMs is NOT comparable across stages with down-delay>0 (the shim defers the send).',
+    stages,
+  };
+}
+
+/**
  * `adhoc`: a single-shim bot ramp driven entirely by the caller's options —
  * the env-configured run preserved from #141 (BOTS / TICK / DELAY / LOSS knobs).
  * One room, live bot ramp.
@@ -172,6 +213,7 @@ export const SCENARIOS: Record<string, (o?: ScenarioOpts) => ScenarioDef> = {
   'n2-stress-ramp': n2StressRamp,
   'n2-latency-sweep': n2LatencySweep,
   'n2-tickrate-sweep': n2TickrateSweep,
+  'n2-wan-profile-sweep': n2WanProfileSweep,
   adhoc,
 };
 
