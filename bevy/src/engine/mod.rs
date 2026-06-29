@@ -7,4 +7,5 @@
 
 pub mod hud;
 pub mod input;
+pub mod nav;
 pub mod scene;
