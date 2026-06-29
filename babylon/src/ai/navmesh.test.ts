@@ -35,6 +35,10 @@ const GOAL: Vec3 = { x: -8, y: 0, z: 8 };
 // Goal-reached tolerance and intrusion sampling step, in world units / [0,1].
 const REACH_THRESHOLD = 1.0;
 const SEGMENT_SAMPLE_STEP = 0.01;
+// How close the open-ground path may stay to the straight line, world units.
+const OPEN_PATH_SLACK = 1.0;
+// Minimum extra length the walled (detoured) path must add over the open one, world units.
+const MIN_DETOUR_EXTRA = 4.0;
 
 const distXZ = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -77,6 +81,8 @@ describe("buildHeadlessNav", () => {
       const goal = nav.closestPoint(GOAL);
       const path = nav.computePath(start, goal);
 
+      // Guard against a vacuous pass: an empty path would satisfy both checks below.
+      expect(path.length).toBeGreaterThan(1);
       // No waypoint sits inside the wall footprint...
       for (const p of path) {
         expect(isInsideFootprintXZ(WALL, p, 0)).toBe(false);
@@ -100,9 +106,11 @@ describe("buildHeadlessNav", () => {
 
       const directDistance = distXZ(start, goal);
       // The open path is essentially the straight line; the walled path bends.
-      expect(pathLength(openPath)).toBeLessThan(directDistance + 1);
+      expect(pathLength(openPath)).toBeLessThan(directDistance + OPEN_PATH_SLACK);
       expect(walledPath.length).toBeGreaterThan(openPath.length);
-      expect(pathLength(walledPath)).toBeGreaterThan(pathLength(openPath) + 4);
+      expect(pathLength(walledPath)).toBeGreaterThan(
+        pathLength(openPath) + MIN_DETOUR_EXTRA,
+      );
     } finally {
       walled.dispose();
       open.dispose();

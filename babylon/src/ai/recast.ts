@@ -25,7 +25,13 @@ let cached: Promise<RecastModule> | null = null;
 export function loadRecast(): Promise<RecastModule> {
   if (!cached) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Emscripten factory default export, see file header
-    cached = (RecastFactory as any)() as Promise<RecastModule>;
+    const loading = (RecastFactory as any)() as Promise<RecastModule>;
+    // Drop the cache on failure so a transient WASM-init error stays retryable
+    // rather than poisoning every later caller with a permanently rejected promise.
+    cached = loading.catch((err) => {
+      cached = null;
+      throw err;
+    });
   }
   return cached;
 }

@@ -142,21 +142,29 @@ export async function buildHeadlessNav(
   const recast = await loadRecast();
   const engine = new NullEngine();
   const scene = new Scene(engine);
-  const { ground, blockers } = buildSpecMeshes(scene, spec);
-  const plugin = createNavMesh(recast, [ground, ...blockers], params);
+  try {
+    const { ground, blockers } = buildSpecMeshes(scene, spec);
+    const plugin = createNavMesh(recast, [ground, ...blockers], params);
 
-  return {
-    plugin,
-    blockers: spec.blockers,
-    closestPoint: (p) => toVec3(plugin.getClosestPoint(toVector3(p))),
-    computePath: (start, end) =>
-      plugin.computePath(toVector3(start), toVector3(end)).map(toVec3),
-    dispose: () => {
-      plugin.dispose();
-      scene.dispose();
-      engine.dispose();
-    },
-  };
+    return {
+      plugin,
+      blockers: spec.blockers,
+      closestPoint: (p) => toVec3(plugin.getClosestPoint(toVector3(p))),
+      computePath: (start, end) =>
+        plugin.computePath(toVector3(start), toVector3(end)).map(toVec3),
+      dispose: () => {
+        plugin.dispose();
+        scene.dispose();
+        engine.dispose();
+      },
+    };
+  } catch (err) {
+    // Mesh build or navmesh generation failed before a NavQuery (with its dispose)
+    // could be returned; tear down the private engine/scene so they do not leak.
+    scene.dispose();
+    engine.dispose();
+    throw err;
+  }
 }
 
 /** Total Euclidean length of a polyline path. */
