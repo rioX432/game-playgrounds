@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
+    "@recast-navigation/three": "^0.43.1",
+    "recast-navigation": "^0.43.1",
     "three": "^0.169.0"
   },
   "devDependencies": {
