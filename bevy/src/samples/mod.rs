@@ -27,6 +27,7 @@ pub mod s11_top_down_twin_stick;
 pub mod s12_tiny_planet;
 pub mod s13_stress_bodies;
 pub mod s14_navmesh_pathfind;
+pub mod s16_guard_ai;
 
 /// Static, render-free metadata for a sample. Cheap to enumerate (e.g. to build
 /// the menu) without touching any gameplay system.
@@ -69,6 +70,7 @@ pub enum AppState {
     S12TinyPlanet,
     S13StressBodies,
     S14NavmeshPathfind,
+    S16GuardAi,
 }
 
 /// One menu row: its metadata + the `AppState` selecting it enters.
@@ -136,6 +138,10 @@ pub fn all() -> Vec<SampleEntry> {
             meta: s14_navmesh_pathfind::META,
             state: AppState::S14NavmeshPathfind,
         },
+        SampleEntry {
+            meta: s16_guard_ai::META,
+            state: AppState::S16GuardAi,
+        },
     ]
 }
 
@@ -157,5 +163,6 @@ pub fn register_samples(app: &mut App) {
         s12_tiny_planet::TinyPlanetPlugin,
         s13_stress_bodies::StressBodiesPlugin,
         s14_navmesh_pathfind::NavmeshPathfindPlugin,
+        s16_guard_ai::GuardAiPlugin,
     ));
 }
