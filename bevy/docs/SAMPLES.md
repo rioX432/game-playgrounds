@@ -27,6 +27,7 @@ Each sample is one module `src/samples/sNN_name.rs` whose module-doc header
 | 11 | Top-Down Twin-Stick Movement | [`s11_top_down_twin_stick.rs`](../src/samples/s11_top_down_twin_stick.rs) | Decoupled move + cursor aim (free cursor, no pointer-lock) |
 | 12 | Tiny Planet | [`s12_tiny_planet.rs`](../src/samples/s12_tiny_planet.rs) | Spherical gravity + walk-on-sphere + props + damped follow camera |
 | 13 | Stress / Load Harness | [`s13_stress_bodies.rs`](../src/samples/s13_stress_bodies.rs) | Spawn batches of dynamic boxes; live `ms/frame` readout (cross-engine perf probe) |
+| 14 | Navmesh Pathfinding (dynamic re-path) | [`s14_navmesh_pathfind.rs`](../src/samples/s14_navmesh_pathfind.rs) | Polyanya A→B query over a navmesh; a wall drops on the path → re-bake + re-route (Ch4 NPC/AI) |
 
 ## Shared foundation (`src/engine/`)
 
@@ -35,6 +36,8 @@ Added once in `main.rs`; samples read its resources:
 - `input.rs` — `FoundationInputPlugin`: `MoveIntent` / `LookState` + pointer-lock.
 - `scene.rs` — `spawn_ground`, `spawn_light_preset`, `spawn_box_grid`.
 - `hud.rs` — controls overlay + FPS (`FrameTimeDiagnosticsPlugin`).
+- `nav.rs` — Ch4 navigation: pure-CPU navmesh build + Polyanya path query
+  (`vleue_navigator`), Recast bake wiring (`bevy_rerecast`), gizmo debug helpers.
 
 ## How this was built (AI-dev record)
 
