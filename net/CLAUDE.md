@@ -85,11 +85,11 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 
 | Dir | Stack | Status |
 |-----|-------|--------|
-| `protocol/` | TypeScript shared types (measurement schema + wire DTOs) | locked schema (#140) + thin DTOs (#141) |
+| `protocol/` | TypeScript shared types (measurement schema + wire DTOs) | locked schema (#140) + thin DTOs (#141); `ClientRenderSample` sidecar contract + shared pure `aggregateRenderWindow` sampler (#165) |
 | `server/` | TypeScript + Colyseus `0.16.3` authoritative room (headless) | bot driver + transport shim + metrics.jsonl (#141); N2 load-probe scenarios — sync-count ramp + bidirectional shim sweep + tick-rate sweep (#144) |
-| `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142) |
-| `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143) |
-| `bevy/` | Rust + Bevy `0.18.1` + `bevy_replicon 0.40.4` / `bevy_replicon_renet 0.16.0` native authority+client | dependency spike — `cargo check` green + minimal plugin skeleton (#145); N1 server-authoritative replication + client interpolation, render/net-sim split, real-UDP loopback test (#146); N2 load probe — bot ramp + app-level bidirectional conditioner + `metrics.jsonl` in the #140 schema, with documented honest-parity gaps vs the web probe (#147) |
+| `web-three/` | TypeScript + Three.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | room + position sync + interpolation + HUD (#142); client-render probe — `?probe=1` rAF sidecar emitting `ClientRenderSample` via the shared `aggregateRenderWindow` sampler (#166) |
+| `web-babylon/` | TypeScript + Babylon.js + `colyseus.js 0.16.3` N1 client (render/input/interp) | same server/room as web-three; identical netcode, Babylon render only (#143); client-render probe — `?probe=1` render-loop sidecar emitting `ClientRenderSample` via the same `aggregateRenderWindow` sampler (#167) |
+| `bevy/` | Rust + Bevy `0.18.1` + `bevy_replicon 0.40.4` / `bevy_replicon_renet 0.16.0` native authority+client | dependency spike — `cargo check` green + minimal plugin skeleton (#145); N1 server-authoritative replication + client interpolation, render/net-sim split, real-UDP loopback test (#146); N2 load probe — bot ramp + app-level bidirectional conditioner + `metrics.jsonl` in the #140 schema, with documented honest-parity gaps vs the web probe (#147); client-render probe — windowed `--client` probe emitting `ClientRenderSample` via the same `aggregateRenderWindow` sampler (#168) |
 
 > Build: `cd net/protocol && npm install && npm run typecheck && npm test` (must stay green).
 > Build: `cd net/server && npm install && npm run typecheck && npm test` (must stay green).
@@ -100,6 +100,10 @@ All measurement output is **JSON Lines**: one `MetricsSample`
 > **not** touch the `../three`, `../babylon`, or `../bevy` builds. The two web
 > clients piggyback the **same** server + room ("game"); they differ ONLY in the
 > render/input layer, so cross-client (three <-> babylon) mutual visibility holds.
+>
+> The client-render-under-load synthesis is `COMPARISON.md` §8.7 (#169); raw
+> evidence (server `metrics.jsonl` + `*-client-render.jsonl` sidecars) and the
+> web-on-steam Layer-2 host-overhead measurements live under `net/measurements/`.
 
 ### Colyseus version pin (caveat)
 

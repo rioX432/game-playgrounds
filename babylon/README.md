@@ -45,6 +45,17 @@ interface Sample {
 `mount` builds the mechanic into `ctx.scene`; the optional returned function
 cleans up listeners/overlay DOM when the user switches away.
 
+### Auto-measure mode & renderer switch
+
+`?measure=1` turns on **auto-measure mode** (OFF for normal play): it spawns a
+seeded, deterministic stress scene and records raw `requestAnimationFrame`
+present-to-present deltas → p50/p95/p99 + longFrameCount. Full URL contract:
+`?sample=13-stress-bodies&bodies=2000&measure=1&seed=N&warmupMs=...&windowMs=...&renderer=webgl|webgpu`
+(parsed by `src/measure/config.ts`). `?renderer=webgpu` runs the scene on a
+`WebGPUEngine` (`src/engine/measureWebgpu.ts`); absent or `webgl` uses the
+classic `Engine` — both come from `@babylonjs/core`, so no dual-module-graph
+hazard. Measured results: [`../COMPARISON.md`](../COMPARISON.md) §5.1 / §9.
+
 ## Samples
 
 All 12 mechanics in the shared lineup are implemented. Each folder has a

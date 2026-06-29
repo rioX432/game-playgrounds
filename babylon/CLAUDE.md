@@ -39,7 +39,11 @@ babylon-playground/
 │   ├── style.css            — gallery + sample-overlay styling
 │   ├── engine/
 │   │   ├── bootstrap.ts     — Playground: one Engine, render loop, scene switching
-│   │   └── havok.ts         — load Havok WASM once, hand back a HavokPlugin
+│   │   ├── havok.ts         — load Havok WASM once, hand back a HavokPlugin
+│   │   └── measureWebgpu.ts — WebGPUEngine path for ?renderer=webgpu (dynamic import)
+│   ├── measure/
+│   │   ├── config.ts        — parse the auto-measure URL contract (?measure=1&renderer=...); pure, unit-tested
+│   │   └── probe.ts         — rAF present-to-present delta capture → p50/p95/p99 + longFrameCount (seeded)
 │   └── samples/
 │       ├── types.ts         — Sample + SampleContext contract
 │       ├── registry.ts      — Sample[] the gallery renders
@@ -69,8 +73,9 @@ babylon-playground/
 
 - No GUI / visual scene editor — everything is code.
 - No bespoke hand-made art — primitives and procedural meshes/textures only.
-- No networking / multiplayer — this playground verifies mechanics on a single
-  machine. Multiplayer feel belongs in a different project.
+- No networking / multiplayer — this top-level subdir verifies mechanics on a
+  single machine. Netcode lives in its own chapter at `../net/` (with its own
+  web-three / web-babylon clients), not here.
 - No mobile build — desktop browser only.
 
 ## Tech Stack

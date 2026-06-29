@@ -25,6 +25,14 @@ The goal is not to decide on paper — it's to **actually touch and compare**, s
 
 ➡️ **The findings are written up in [`COMPARISON.md`](./COMPARISON.md)** — the cross-engine verdict across all four axes, grounded in the per-sample feel notes and measured code size. All 12 mechanics are built in every engine.
 
+### The chapters so far
+
+The repo grew past the single-machine comparison into three measured chapters, all written up in `COMPARISON.md`:
+
+1. **Single-machine mechanics** (`three/`, `babylon/`, `bevy/`, COMPARISON §1–§7) — the 12-mechanic cross-engine comparison above, including a 2000-body stress measurement.
+2. **Networking / multiplayer** (`net/`, COMPARISON §8) — server-authoritative + client-interpolation, **web (Colyseus, three+babylon clients) vs. native (Bevy + bevy_replicon)**, with a locked `metrics.jsonl` schema and measured bandwidth / RTT / snapshot-age / tick-cost on localhost.
+3. **Web-on-Steam viability** (`docs/web-on-steam/`, COMPARISON §9) — does a **WebGPU** renderer lift the web ceiling (measured: no, ≈ WebGL on these scenes), and what does the desktop wrapper cost (**Electron 237 MB vs. Tauri 5 MB**, with a macOS-26 WebGPU gate on Tauri)?
+
 ---
 
 ## Concepts cheat-sheet (the easy-to-confuse parts)
@@ -62,13 +70,22 @@ The goal is not to decide on paper — it's to **actually touch and compare**, s
 ### 4. The performance ladder (fastest last)
 
 ```
-WebGL  <  WebGPU  <  Native (wgpu / Bevy)
+in theory:   WebGL  <  WebGPU  <  Native (wgpu / Bevy)
+measured*:   WebGL  ≈  WebGPU  <  Native (wgpu / Bevy)
 ```
 
 - WebGL uses the GPU, but it's the *entry* tier of performance.
-- Want more? → **WebGPU** (faster, still in the browser).
+- WebGPU is the newer browser path — **in theory** faster.
 - Want the ceiling? → **Native (Bevy)** — but AI iteration gets heavier.
 - 👉 For the **light games** we're targeting, **WebGL is plenty.** The gap only shows in heavy games.
+
+> \* **We actually measured it** (chapter 3, COMPARISON §5.1 / §9). On these
+> physics-bound 2000-body scenes **WebGPU did *not* lift the web ceiling** — it
+> landed at parity with WebGL (Three: a slightly tighter p99 tail only; Babylon:
+> marginally *slower* on WebGPU). Native (Bevy) is still clearly ahead. So the
+> measured ladder is `WebGL ≈ WebGPU < native`, not the textbook one — for *these*
+> scenes. The real web-vs-native trade-off turned out to be **distribution** (§6),
+> not the renderer.
 
 ### 5. How AI-friendly is it? (the "editor problem")
 
@@ -83,9 +100,12 @@ WebGL  <  WebGPU  <  Native (wgpu / Bevy)
 
 ### 6. Deployment (shipping on Steam)
 
-- **Web (Three / Babylon):** **wrap it in Electron** → `.exe` → Steam. (Electron over Tauri for games: more consistent rendering across machines.)
-- **Bevy:** it's already a **native `.exe`** → Steam (no wrapping needed).
+- **Web (Three / Babylon):** wrap the build in a **desktop shell** → `.exe`/`.app` → Steam. Two shells, both now built and measured (chapter 3, COMPARISON §9):
+  - **Electron** (bundled Chromium): **237 MB** installed, but WebGPU works on **any** macOS and it measures like a normal app. The safe, heavy default.
+  - **Tauri** (system WebView): **5.0 MB** (~47× smaller), but WebGPU is **macOS-26+ only** and the webview throttles itself when not frontmost. The featherweight gamble.
+- **Bevy:** it's already a **native `.exe`/binary** → Steam (no wrapping needed), and it holds the performance ceiling (§5).
 - **Steam process:** developer signup + $100 (recouped once the game earns $1,000) + store page + upload. You keep 70%.
+- Verified packaging commands + the Steam upload checklist: [`docs/PACKAGING.md`](./docs/PACKAGING.md).
 
 ### 7. We deliberately do NOT build a cross-engine adapter
 

@@ -32,13 +32,22 @@ cd bevy && cargo run --features bevy/dynamic_linking   # run with fast increment
 
 ## Chapters
 
-1. **Single-machine mechanics** (`three/`, `babylon/`, `bevy/`) — done; written up in `COMPARISON.md`.
-2. **Networking / multiplayer** (`net/`) — the current chapter. Goal: multiplayer
+1. **Single-machine mechanics** (`three/`, `babylon/`, `bevy/`) — done; written up in `COMPARISON.md` §1–§7.
+2. **Networking / multiplayer** (`net/`) — **done / measured.** Goal: multiplayer
    **implementation patterns + performance characteristics** across the same engines,
    not reproducing a specific game. Server-authoritative + client-interpolation, with a
    fixed `metrics.jsonl` measurement schema locked before any sample is built. Web side
-   piggybacks on **Colyseus**; native side uses **Bevy 0.18 + bevy_replicon**. See
-   `net/CLAUDE.md` and `COMPARISON.md §8`.
+   piggybacks on **Colyseus** (three+babylon clients); native side uses **Bevy 0.18 +
+   bevy_replicon**. Real localhost measurements (bandwidth / RTT / snapshot-age /
+   tick-cost) + a client-render-under-load probe. See `net/CLAUDE.md` and
+   `COMPARISON.md §8`.
+3. **Web-on-Steam viability** (`docs/web-on-steam/`) — **done / measured.** Asks the
+   shipping question for the web engines: (Layer 1) does a **WebGPU** renderer lift the
+   web ceiling — measured **no**, ≈ WebGL on these physics-bound scenes — and (Layer 2)
+   what does the desktop wrapper cost: **Electron** (237 MB, WebGPU on any macOS) vs.
+   **Tauri** (5 MB, WebGPU macOS-26+ only, measurement-hostile webview). Added an
+   auto-measure mode + `?renderer=webgl|webgpu` switch to the top-level `three/` and
+   `babylon/`. See `docs/web-on-steam/`, `packaging/`, and `COMPARISON.md §5.1 / §9`.
 
 ## Won't Do
 

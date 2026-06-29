@@ -24,6 +24,10 @@ src/
   style.css
   engine/
     bootstrap.ts     — creates the WebGLRenderer + render loop + resize; fresh Scene + Camera per sample
+    webgpu/          — WebGPURenderer path (?renderer=webgpu|webgl); separate dynamic import to keep three core + three/webgpu out of one module graph
+  measure/
+    config.ts        — parse the auto-measure URL contract (?measure=1&sample=...&renderer=...); pure, unit-tested
+    probe.ts         — rAF present-to-present delta capture → p50/p95/p99 + longFrameCount (seeded, deterministic)
   samples/
     types.ts         — Sample + SampleContext interfaces (THE contract)
     registry.ts      — array of all samples (import + register here)
@@ -48,7 +52,7 @@ Max 3. Every change must directly strengthen one of these (one-step test, no ind
 
 - **GUI / visual scene editor** — code-first only (breaks Core Value 3).
 - **Bespoke hand-made 3D art** — primitives / procedural / CC0 only. This playground tests *mechanics*, not art.
-- **Networking / multiplayer** — single-machine mechanic verification only. Netcode is a separate spike.
+- **Networking / multiplayer** — this top-level subdir stays single-machine mechanic verification only. Netcode lives in its own chapter at `../net/` (with its own web-three / web-babylon clients), not here.
 - **Mobile build** — target is desktop browser (→ Electron/Tauri for Steam). This genre is PC/Steam-first.
 
 ## Tech Stack
