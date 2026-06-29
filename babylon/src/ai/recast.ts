@@ -24,8 +24,14 @@ let cached: Promise<RecastModule> | null = null;
  */
 export function loadRecast(): Promise<RecastModule> {
   if (!cached) {
+    // recast-detour's Emscripten glue ends with `this["Recast"] = Module`. Under
+    // ESM strict mode (the browser/Vite path) top-level `this` is undefined, so a
+    // bare `RecastFactory()` throws "Cannot set properties of undefined". Bind
+    // `this` to globalThis so that assignment lands on the global object instead.
+    // (Node's CJS path binds `this` to module.exports, which is why the headless
+    // NullEngine tests never hit this — see header.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Emscripten factory default export, see file header
-    const loading = (RecastFactory as any)() as Promise<RecastModule>;
+    const loading = (RecastFactory as any).call(globalThis) as Promise<RecastModule>;
     // Drop the cache on failure so a transient WASM-init error stays retryable
     // rather than poisoning every later caller with a permanently rejected promise.
     cached = loading.catch((err) => {
