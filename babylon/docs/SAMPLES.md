@@ -28,6 +28,7 @@ Deep-link any sample in the gallery via `#/<id>`.
 | 12b | Tiny Planet | [`12b-tiny-planet`](../src/samples/12b-tiny-planet) | Tiny-planet scene + damped follow camera |
 | 13 | Stress / Load Harness | [`13-stress-bodies`](../src/samples/13-stress-bodies) | Spawn batches of dynamic boxes; live `ms/frame` readout (cross-engine perf probe) |
 | 14 | Navmesh Pathfind + Dynamic Re-path | [`14-navmesh-pathfind`](../src/samples/14-navmesh-pathfind) | Agent walks A→B over a Recast/Detour navmesh; a wall drops mid-route and the path rebuilds to detour the gap |
+| 16 | Guard AI — FSM Patrol/Detect/Chase/Return | [`16-guard-ai`](../src/samples/16-guard-ai) | Hand-rolled FSM + hand-rolled seek/arrive/avoid steering; the guard navmesh-chases a scripted player, then gives up and returns |
 
 > Sample 12 is split into **12a** (spherical-gravity core) and **12b** (tiny-planet
 > scene + camera polish), matching the core/polish issue split.
